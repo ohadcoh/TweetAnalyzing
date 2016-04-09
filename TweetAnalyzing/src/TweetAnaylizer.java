@@ -13,7 +13,7 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3Client;
 import com.amazonaws.services.s3.model.PutObjectRequest;
 
-// main class
+// main class of the first assignment in DSPS course
  public class TweetAnaylizer{
 
 	 public static PropertiesCredentials Credentials;
