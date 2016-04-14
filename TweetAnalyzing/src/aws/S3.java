@@ -21,12 +21,17 @@ public class S3 {
 	private String bucketName;
 	
 	public S3(AWSCredentials credentials, String _bucketName){
-		AmazonS3 s3 = new AmazonS3Client(credentials);
-		bucketName = _bucketName;
+		this.s3 = new AmazonS3Client(credentials);
+		this.bucketName = _bucketName;
 		
 		try {
-			if(!s3.doesBucketExist(_bucketName))
+			if(!s3.doesBucketExist(_bucketName)){
 				s3.createBucket(_bucketName);
+				System.out.println("bucket created");
+			}
+			else
+				System.out.println("bucket already exists");
+			
 		}catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it "
 	                + "to Amazon S3, but was rejected with an error response for some reason.");
