@@ -1,30 +1,30 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <classpath>
-	<classpathentry kind="src" path="src"/>
+	<classpathentry excluding="examples/" kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/lib/aws-java-sdk-1.10.67.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/lib/aws-java-sdk-flow-build-tools-1.10.67.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/aspectjrt-1.8.2.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/aspectjweaver.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/commons-codec-1.6.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/commons-logging-1.1.3.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/freemarker-2.3.9.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/httpclient-4.3.6.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/httpcore-4.3.3.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/jackson-annotations-2.5.0.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/jackson-core-2.5.3.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/jackson-databind-2.5.3.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/jackson-dataformat-cbor-2.5.3.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/javax.mail-api-1.4.6.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/joda-time-2.8.1.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/spring-beans-3.0.7.RELEASE.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/spring-context-3.0.7.RELEASE.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/spring-core-3.0.7.RELEASE.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/aws-java-sdk-1.10.67/third-party/lib/spring-test-3.0.7.RELEASE.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/ejml-0.23.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/jollyday-0.4.7.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/stanford-corenlp-3.3.0.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/stanford-corenlp-3.3.0-models.jar"/>
-	<classpathentry kind="lib" path="/home/parallels/eclipse/jsoup-1.8.3.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/ejml-0.23.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/jsoup-1.8.3.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/jollyday-0.4.7.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/stanford-corenlp-3.3.0.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/stanford-corenlp-3.3.0-models.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/lib/aws-java-sdk-1.10.69.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/lib/aws-java-sdk-flow-build-tools-1.10.69.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/aspectjrt-1.8.2.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/aspectjweaver.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/commons-codec-1.6.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/commons-logging-1.1.3.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/freemarker-2.3.9.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/httpclient-4.3.6.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/httpcore-4.3.3.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/jackson-annotations-2.5.0.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/jackson-core-2.5.3.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/jackson-databind-2.5.3.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/jackson-dataformat-cbor-2.5.3.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/javax.mail-api-1.4.6.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/joda-time-2.8.1.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/spring-beans-3.0.7.RELEASE.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/spring-context-3.0.7.RELEASE.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/spring-core-3.0.7.RELEASE.jar"/>
+	<classpathentry kind="lib" path="/dspsJars/aws-java-sdk-1.10.69/third-party/lib/spring-test-3.0.7.RELEASE.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
