@@ -21,6 +21,10 @@ import com.amazonaws.services.sqs.model.DeleteQueueRequest;
 import com.amazonaws.services.sqs.model.Message;
 import com.amazonaws.services.sqs.model.ReceiveMessageRequest;
 import com.amazonaws.services.sqs.model.SendMessageRequest;
+
+import aws.S3;
+import aws.SQS;
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.*;
 
@@ -34,50 +38,34 @@ import com.amazonaws.services.s3.model.PutObjectRequest;
  public class TweetAnaylizer{
 
 	 public static PropertiesCredentials Credentials;
-	 public static AmazonS3 S3;
-	 public static String bucketName = "dsps_ass1";
-	 public static String propertiesFilePath = "./ohadInfo.properties";
+	 //public static AmazonS3 S3;
+	 public static String bucketName = "dspsass1bucket";
+	 public static String queueName = "dspsass1queue";
+	 public static String propertiesFilePath = "./asafsarid.properties";
 	 public static String fileToUploadPath = "../tweetLinks.txt";
 
- public static void mainOld(String[] args) throws FileNotFoundException,IOException, InterruptedException {
-	 Credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
-	 System.out.println("Credentials created.");
-	 
-	 S3 = new AmazonS3Client(Credentials);
-	 System.out.println("AmazonS3Client created.");
-	 
-	 // If the bucket doesnt exist - will create it.
-	 // Notice - this will create it in the default region :Region.US_Standard
-	 if (!S3.doesBucketExist(bucketName)) {
-		 S3.createBucket(bucketName);
-	 }
-	 System.out.println("Bucket exist.");
-	 
-	 File f = new File(fileToUploadPath);
-	 PutObjectRequest por = new PutObjectRequest(bucketName, f.getName(),f);
-	 
-	 // Upload the file
-	 S3.putObject(por);
-	 System.out.println("File uploaded.");
- }
- 
 public static void main(String[] args) throws FileNotFoundException, IOException, InterruptedException {
+	
+		
+	
 	
 		// creating credentials
 		AWSCredentials credentials = new PropertiesCredentials(
-				TweetAnaylizer.class.getResourceAsStream("AwsCredentials.properties"));
+				TweetAnaylizer.class.getResourceAsStream(propertiesFilePath));
 		//Credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
  		System.out.println("Credentials created.");
  		
  		// uploading the input file to S3
- 		S3 = new AmazonS3Client(credentials);
- 		if (!S3.doesBucketExist(bucketName)) {		// If the bucket doesnt exist - will create it.
- 			S3.createBucket(bucketName);			// Notice - this will create it in the default region :Region.US_Standard
- 		} 
- 		File f = new File(fileToUploadPath);
- 		PutObjectRequest por = new PutObjectRequest(bucketName, f.getName(),f);
- 		S3.putObject(por);
- 		System.out.println("Input file uploaded!");
+ 		S3 s3 = new S3(credentials, bucketName);
+ 		s3.uploadFile(fileToUploadPath);
+ 		
+ 		SQS sqs = new SQS(credentials, queueName);
+ 		sqs.sendMessage("Start");
+ 		
+ 		List<Message> queue_msg = sqs.getMessages(1);
+ 		
+ 		
+ 		
  		
 //		System.out.println("Starting anaylizing");
 //		// create worker and init it
