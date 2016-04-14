@@ -1,6 +1,14 @@
 package remote;
+import java.io.IOException;
 import java.util.*;
 
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+
+import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.services.sqs.model.Message;
+
+import aws.SQS;
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreAnnotations.NamedEntityTagAnnotation;
 import edu.stanford.nlp.ling.CoreAnnotations.SentencesAnnotation;
@@ -20,9 +28,15 @@ class Worker {
 	// fields related to tweet analyzing
 	private StanfordCoreNLP sentimentPipeline;
 	private StanfordCoreNLP NERPipeline;
+	private SQS inputSQS;
+	private SQS outputSQS;
 
 	// initialize analyze tweets fields with the needed info haha
-	Worker() {
+	Worker(AWSCredentials credentials,String _inputQueueUrl, String _outputQueueUrl) {
+		//init SQSs
+		inputSQS  = new SQS(credentials, _inputQueueUrl);
+		outputSQS = new SQS(credentials, _outputQueueUrl);
+		// init properties for processing
 		Properties propsSentiment = new Properties();
 		propsSentiment.put("annotators", "tokenize, ssplit, parse, sentiment");
 		sentimentPipeline = new StanfordCoreNLP(propsSentiment);
@@ -33,10 +47,29 @@ class Worker {
 
 	}
 	
-	public TweetAnaylizingOutput analyzeTweet(String tweet) {
+	public TweetAnaylizingOutput analyzeTweet() {
+		// read message from SQS
+		Message inputMessage = inputSQS.getMessages(1).get(0);
+		String tweetLink = inputMessage.toString();
+		// isolate the tweet
+		Document tweetPage;
+		String tweet = new String("");;
+		try {
+			tweetPage = Jsoup.connect(tweetLink).get();
+			tweet = tweetPage.select("title").first().text();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		// analyze the tweet
 		Vector<String> entities = findEntities(tweet);
 		int sentimentColot = findSentiment(tweet);
 		TweetAnaylizingOutput output = new TweetAnaylizingOutput(tweet, sentimentColot, entities);
+		// write message to output SQS
+		//Message outputMessage = new Message();
+		outputSQS.sendMessage(output.toString());
+		// delete message
+		inputSQS.deleteMessage(inputMessage);
 		
 		return output;
 	}
