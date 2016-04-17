@@ -24,7 +24,7 @@ import edu.stanford.nlp.util.CoreMap;
 
 
 
-class Worker {
+public class Worker {
 	// fields related to tweet analyzing
 	private StanfordCoreNLP sentimentPipeline;
 	private StanfordCoreNLP NERPipeline;
@@ -32,7 +32,7 @@ class Worker {
 	private SQS outputSQS;
 
 	// initialize analyze tweets fields with the needed info haha
-	Worker(AWSCredentials credentials,String _inputQueueUrl, String _outputQueueUrl) {
+	public Worker(AWSCredentials credentials,String _inputQueueUrl, String _outputQueueUrl) {
 		//init SQSs
 		inputSQS  = new SQS(credentials, _inputQueueUrl);
 		outputSQS = new SQS(credentials, _outputQueueUrl);
@@ -45,6 +45,16 @@ class Worker {
 		propsEntities.put("annotators", "tokenize , ssplit, pos, lemma, ner");
 		NERPipeline = new StanfordCoreNLP(propsEntities);
 
+	}
+	
+	public void readMessage(){
+		Message message = inputSQS.getMessages(1).get(0);
+		System.out.format("income message: %s\n", message.getBody());
+		inputSQS.deleteMessage(message);
+	}
+	
+	public void sendMessage(String message){
+		outputSQS.sendMessage(message);
 	}
 	
 	public TweetAnaylizingOutput analyzeTweet() {

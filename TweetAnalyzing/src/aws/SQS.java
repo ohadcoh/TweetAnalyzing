@@ -1,12 +1,10 @@
 package aws;
 
 import java.util.List;
-import java.util.UUID;
  
 import com.amazonaws.AmazonClientException;
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
-import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.sqs.AmazonSQS;
 import com.amazonaws.services.sqs.AmazonSQSClient;
 import com.amazonaws.services.sqs.model.CreateQueueRequest;
@@ -30,7 +28,7 @@ public class SQS {
 				
 		try{
 	        System.out.println("Creating a new SQS queue called " + queueName + "\n");
-	        CreateQueueRequest createQueueRequest = new CreateQueueRequest(queueName+ UUID.randomUUID());
+	        CreateQueueRequest createQueueRequest = new CreateQueueRequest(queueName);
 	        this.url = sqs.createQueue(createQueueRequest).getQueueUrl();
 	        System.out.println("Queue URL:" + this.url);
 		} catch (AmazonServiceException ase) {
