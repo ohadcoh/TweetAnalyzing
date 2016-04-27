@@ -22,8 +22,6 @@ import edu.stanford.nlp.sentiment.SentimentCoreAnnotations;
 import edu.stanford.nlp.trees.Tree;
 import edu.stanford.nlp.util.CoreMap;
 
-
-
 public class Worker {
 	// fields related to tweet analyzing
 	private StanfordCoreNLP sentimentPipeline;
@@ -32,10 +30,26 @@ public class Worker {
 	private SQS outputSQS;
 
 	// initialize analyze tweets fields with the needed info haha
-	public Worker(AWSCredentials credentials,String _inputQueueUrl, String _outputQueueUrl) {
+	public Worker(AWSCredentials credentials, String _inputQueueUrl, String _outputQueueUrl) {
 		//init SQSs
 		inputSQS  = new SQS(credentials, _inputQueueUrl);
 		outputSQS = new SQS(credentials, _outputQueueUrl);
+		// init properties for processing
+		Properties propsSentiment = new Properties();
+		propsSentiment.put("annotators", "tokenize, ssplit, parse, sentiment");
+		sentimentPipeline = new StanfordCoreNLP(propsSentiment);
+
+		Properties propsEntities = new Properties();
+		propsEntities.put("annotators", "tokenize , ssplit, pos, lemma, ner");
+		NERPipeline = new StanfordCoreNLP(propsEntities);
+
+	}
+	
+	// another constructor
+	public Worker(AWSCredentials credentials, SQS _inputSQS, SQS _outputSQS) {
+		//init SQSs
+		inputSQS  = _inputSQS;
+		outputSQS = _outputSQS;
 		// init properties for processing
 		Properties propsSentiment = new Properties();
 		propsSentiment.put("annotators", "tokenize, ssplit, parse, sentiment");
@@ -57,31 +71,42 @@ public class Worker {
 		outputSQS.sendMessage(message);
 	}
 	
-	public TweetAnaylizingOutput analyzeTweet() {
-		// read message from SQS
-		Message inputMessage = inputSQS.getMessages(1).get(0);
-		String tweetLink = inputMessage.toString();
-		// isolate the tweet
-		Document tweetPage;
-		String tweet = new String("");;
-		try {
-			tweetPage = Jsoup.connect(tweetLink).get();
-			tweet = tweetPage.select("title").first().text();
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
+	
+	public void analyzeTweet() {
+		// read messages from SQS
+		while(true){
+			List<Message> inputMessageList = inputSQS.getMessages(1);
+			// if queue empty
+			if(inputMessageList.size() == 0)
+				break;
+			Message inputMessage = inputMessageList.get(0);
+			String parsedTweet[] = inputMessage.getBody().split("\\s+");
+			String tweetLink = parsedTweet[0];
+			String jobID	 = parsedTweet[1];
+			System.out.println("tweet link: " + tweetLink + " , jobID: " + jobID);
+			// isolate the tweet
+			Document tweetPage;
+			String tweet = new String("");
+			try {
+				tweetPage = Jsoup.connect(tweetLink).get();
+				tweet = tweetPage.select("title").first().text();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (IllegalArgumentException e) {
+				e.printStackTrace();
+			}
+			System.out.println("Tweet before analyzing: " + tweet);
+			// analyze the tweet
+			Vector<String> entities = findEntities(tweet);
+			int sentimentColot = findSentiment(tweet);
+			//TweetAnaylizingOutput output = new TweetAnaylizingOutput(tweet, sentimentColot, entities);
+			// write message to output SQS
+			//Message outputMessage = new Message();
+			outputSQS.sendMessage(tweet+ ", " + sentimentColot + ", " + entities);
+			// delete message
+			inputSQS.deleteMessage(inputMessage);
+			
 		}
-		// analyze the tweet
-		Vector<String> entities = findEntities(tweet);
-		int sentimentColot = findSentiment(tweet);
-		TweetAnaylizingOutput output = new TweetAnaylizingOutput(tweet, sentimentColot, entities);
-		// write message to output SQS
-		//Message outputMessage = new Message();
-		outputSQS.sendMessage(output.toString());
-		// delete message
-		inputSQS.deleteMessage(inputMessage);
-		
-		return output;
 	}
 
 	// find named entities in a tweet

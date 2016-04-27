@@ -76,8 +76,9 @@ public class S3 {
 		try{
             System.out.println("Downloading an object");
             S3Object object = s3.getObject(new GetObjectRequest(bucketName, key));
-            System.out.println("Content-Type: "  + object.getObjectMetadata().getContentType());
-            displayTextInputStream(object.getObjectContent());
+            //System.out.println("Content-Type: "  + object.getObjectMetadata().getContentType());
+            //displayTextInputStream(object.getObjectContent());
+            return object;
 		}catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it "
 	                + "to Amazon S3, but was rejected with an error response for some reason.");
@@ -91,8 +92,8 @@ public class S3 {
 	                + "a serious internal problem while trying to communicate with S3, "
 	                + "such as not being able to access the network.");
 	        System.out.println("Error Message: " + ace.getMessage());
-	    }catch (IOException ioe) {
-	    	System.out.println("IO Exception! Error Message: " + ioe.getMessage());
+	    //}catch (IOException ioe) {
+	    //	System.out.println("IO Exception! Error Message: " + ioe.getMessage());
 	    }
 		return null;
 		

@@ -49,7 +49,7 @@ public class SQS {
 	
 	public void sendMessage(String message){
 		try{
-	        System.out.println("Sending a message to " + queueName + ".\n");
+	        System.out.println("Sending a message: " + message +", to " + queueName + ".\n");
 	        sqs.sendMessage(new SendMessageRequest(url, message));
 		} catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it " +
@@ -69,12 +69,14 @@ public class SQS {
 	
 	public List<Message> getMessages(int numOfMsgs){
 		try{
-			System.out.println("Receiving messages from " + queueName + ".\n");
 	    	ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(url);
 	    	if(numOfMsgs > 10)
 	    		numOfMsgs = 10;
 	    	receiveMessageRequest.withMaxNumberOfMessages(numOfMsgs);
 	    	List<Message> messages = sqs.receiveMessage(receiveMessageRequest).getMessages();
+	    	if(messages.size() != 0)
+	    		System.out.println("Receiving messages: " + messages.get(0) +",  from " + queueName + ".\n");
+
 	    	return messages;
 		} catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it " +
