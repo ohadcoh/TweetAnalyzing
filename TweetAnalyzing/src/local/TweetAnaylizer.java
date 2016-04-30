@@ -32,13 +32,13 @@ import remote.Manager;
 // local application- first assignment in DSPS course
  public class TweetAnaylizer{
 
-	public static PropertiesCredentials Credentials;
-	public static String bucketName = "dspsass1bucket" + UUID.randomUUID();
-	public static String localToManagerQueueName = "localtomanager" + UUID.randomUUID();
-	public static String ManagerToLocalQueueName = "managertolocal" + UUID.randomUUID();
-	public static String propertiesFilePath = "./ohadInfo.properties";
-	public static String fileToUploadPath = "tweetLinks.txt";
-	public static AmazonEC2 ec2;
+	private static String bucketName = "dspsass1bucket" + UUID.randomUUID();
+	private static String localToManagerQueueName = "localtomanager" + UUID.randomUUID();
+	private static String managerToLocalQueueName = "managerToLocal" + UUID.randomUUID();
+
+	private static String propertiesFilePath = "./ohadInfo.properties";
+	private static AmazonEC2 ec2;
+	//private static String id;
 
     public static boolean checkIfManagerExist() {
     	
@@ -77,7 +77,7 @@ import remote.Manager;
         }
     }
 
-    public static void lunchManager(AWSCredentials credentials) throws Exception {    
+    public static void launchManager(AWSCredentials credentials) throws Exception {    
         try {
             // Basic 64-bit Amazon Linux AMI (AMI Id: ami-08111162)
         	// create request for manager
@@ -106,6 +106,21 @@ import remote.Manager;
     }
 	 
     public static void main(String[] args) throws Exception {
+    	// 0. parse input arguments
+    	int argsNum = args.length;
+    	if(argsNum != 3 && argsNum != 4 )
+    	{
+    		System.out.println("Usage: inputFileName outputFileName n terminate(optional)");
+    		return;
+    	}
+
+    	boolean terminate = false;
+		String inputFileName = args[0];
+		String outputFileName = args[1];
+		int numOfWorkers = Integer.parseInt(args[2]);
+		if(argsNum == 4)
+			terminate = true;
+		
 		// 1. creating credentials and ec2 client
 		AWSCredentials credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
  		System.out.println("Credentials created.");
@@ -113,41 +128,57 @@ import remote.Manager;
  		
  		// 2. uploading the input file to S3
  		S3 s3 = new S3(credentials, bucketName);
- 		String inputFileS3key = s3.uploadFile(fileToUploadPath);
+ 		String inputFileS3key = s3.uploadFile(inputFileName);
  		System.out.println("File Uploaded\n");
  		
  		// 3. create queue (from local app to manager) and send message with the key of the file
  		SQS localToManager = new SQS(credentials, localToManagerQueueName);
- 		localToManager.sendMessage(inputFileS3key);
+ 		SQS managerToLocal = new SQS(credentials, managerToLocalQueueName);
  		
-		// 4. find if there is manager instance
+ 		// 4. send with attributes (terminate and numOfWorkers)
+ 		localToManager.sendMessageType1(inputFileS3key, Boolean.toString(terminate), String.valueOf(numOfWorkers));
+ 		
+		// 5. find if there is manager instance
 		if (!checkIfManagerExist())
 		{
 			//will be added when we know how to bootstrap
-			lunchManager(credentials);
+			launchManager(credentials);
 		}
 		
  		// for now - create manager
- 		Manager manager1 = new Manager(credentials, localToManager, s3, 5);
- 		manager1.startWork("job1");
+ 		Manager manager1 = new Manager(credentials, localToManager, managerToLocal, s3, 5);
+ 		manager1.mainMethod();
  		
- 		// 5. read message
+ 		// 5. read your id
+// 		List<Message> idMessages = localToManager.getMessages(2);
+// 		id = idMessages.get(0).getBody();
+// 		System.out.println("id0: " + id);
+// 		id = idMessages.get(1).getBody();
+// 		System.out.println("id1: " + id);
+// 		localToManager.deleteMessage(idMessages.get(0));
+ 		
+ 		// 6. read message
  		// read until receive answer from manager
  		List<Message> messageFromManagerList;
  		do{
- 			messageFromManagerList = localToManager.getMessages(1);
+ 			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
  			if(messageFromManagerList.size() != 0)
- 				break;
- 			Thread.sleep(20);
+ 			{
+ 				//if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
+ 					break;
+ 			}
+ 				
+ 			Thread.sleep(5000);
  		}while(true);
  		Message messageFromManager = messageFromManagerList.get(0);
-        System.out.println("Message from Manager: " + messageFromManager.getBody());
+ 		managerToLocal.deleteMessage(messageFromManagerList.get(0));
+        System.out.println("Message from Manager with my id: " + messageFromManager.getBody());
  		
-        // 5. download the output file        
+        // 7. download the output file, write it to HTML and delete it        
         S3Object outputFile = s3.downloadFile(messageFromManager.getBody());
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(outputFile.getObjectContent()));
-        File file = new File("./LocalOutputFile");      
+        File file = new File(outputFileName);      
         Writer writer = new OutputStreamWriter(new FileOutputStream(file));
 
     	while (true) {          
@@ -165,7 +196,6 @@ import remote.Manager;
         localToManager.deleteQueue();
         // need to delete clients!!
  		
-		
 		System.out.println("Bye bye");
 	}
  }

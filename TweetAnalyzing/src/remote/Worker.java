@@ -28,24 +28,11 @@ public class Worker {
 	private StanfordCoreNLP NERPipeline;
 	private SQS inputSQS;
 	private SQS outputSQS;
-
-	// initialize analyze tweets fields with the needed info haha
-	public Worker(AWSCredentials credentials, String _inputQueueUrl, String _outputQueueUrl) {
-		//init SQSs
-		inputSQS  = new SQS(credentials, _inputQueueUrl);
-		outputSQS = new SQS(credentials, _outputQueueUrl);
-		// init properties for processing
-		Properties propsSentiment = new Properties();
-		propsSentiment.put("annotators", "tokenize, ssplit, parse, sentiment");
-		sentimentPipeline = new StanfordCoreNLP(propsSentiment);
-
-		Properties propsEntities = new Properties();
-		propsEntities.put("annotators", "tokenize , ssplit, pos, lemma, ner");
-		NERPipeline = new StanfordCoreNLP(propsEntities);
-
-	}
+	private long numOfLinksHandled;
+	private long numOfLinksBroken;
+	private long numOfLinksOk;
 	
-	// another constructor
+	// initialize analyze tweets fields with the needed info haha
 	public Worker(AWSCredentials credentials, SQS _inputSQS, SQS _outputSQS) {
 		//init SQSs
 		inputSQS  = _inputSQS;
@@ -58,34 +45,29 @@ public class Worker {
 		Properties propsEntities = new Properties();
 		propsEntities.put("annotators", "tokenize , ssplit, pos, lemma, ner");
 		NERPipeline = new StanfordCoreNLP(propsEntities);
-
+		
+		// init statistics
+		numOfLinksHandled 	= 0;
+		numOfLinksBroken	= 0;
+		numOfLinksOk		= 0;
 	}
-	
-	public void readMessage(){
-		Message message = inputSQS.getMessages(1).get(0);
-		System.out.format("income message: %s\n", message.getBody());
-		inputSQS.deleteMessage(message);
-	}
-	
-	public void sendMessage(String message){
-		outputSQS.sendMessage(message);
-	}
-	
 	
 	public void analyzeTweet() {
-		// read messages from SQS
+		
 		while(true){
+			// 1. read message from SQS
 			List<Message> inputMessageList = inputSQS.getMessages(1);
-			// if queue empty
+			// 2. if queue empty finish
+			// TODO: handle termination properly 
 			if(inputMessageList.size() == 0)
 				break;
+			// 3. isolate id and link
 			Message inputMessage = inputMessageList.get(0);
-			String parsedTweet[] = inputMessage.getBody().split("\\s+");
-			String tweetLink = parsedTweet[0];
-			String jobID	 = parsedTweet[1];
-			System.out.println("tweet link: " + tweetLink + " , jobID: " + jobID);
-			// isolate the tweet
+			String taskId = inputMessage.getMessageAttributes().get("id").getStringValue();
+			String tweetLink = inputMessage.getBody();
+			System.out.println("tweet link: " + tweetLink + " , jobID: " + taskId);
 			Document tweetPage;
+			// 4. isolate tweet from link
 			String tweet = new String("");
 			try {
 				tweetPage = Jsoup.connect(tweetLink).get();
@@ -96,16 +78,13 @@ public class Worker {
 				e.printStackTrace();
 			}
 			System.out.println("Tweet before analyzing: " + tweet);
-			// analyze the tweet
+			// 5. analyze the tweet
 			Vector<String> entities = findEntities(tweet);
 			int sentimentColot = findSentiment(tweet);
-			//TweetAnaylizingOutput output = new TweetAnaylizingOutput(tweet, sentimentColot, entities);
-			// write message to output SQS
-			//Message outputMessage = new Message();
-			outputSQS.sendMessage(tweet+ ", " + sentimentColot + ", " + entities);
-			// delete message
+			// 6. write message to output SQS
+			outputSQS.sendMessageType2(tweet+ ", " + sentimentColot + ", " + entities, taskId);
+			// 7. delete message
 			inputSQS.deleteMessage(inputMessage);
-			
 		}
 	}
 
