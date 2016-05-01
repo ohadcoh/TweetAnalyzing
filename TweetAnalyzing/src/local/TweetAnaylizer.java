@@ -2,11 +2,18 @@ package local;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
 import java.io.Writer;
 import java.util.UUID;
+
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
+
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -178,18 +185,19 @@ import remote.Manager;
         S3Object outputFile = s3.downloadFile(messageFromManager.getBody());
 
         BufferedReader reader = new BufferedReader(new InputStreamReader(outputFile.getObjectContent()));
-        File file = new File(outputFileName);      
-        Writer writer = new OutputStreamWriter(new FileOutputStream(file));
+
+        ArrayList<String> allOutputLines = new ArrayList<String>(); 
 
     	while (true) {          
     	     String line = reader.readLine();           
     	     if (line == null)
     	          break;            
+    	     allOutputLines.add(line);
 
-    	     writer.write(line + "\n");
     	}
     	reader.close();
-        writer.close();
+    	createHTMLFile(allOutputLines, outputFileName+".html");
+    	
         s3.deleteFile(messageFromManager.getBody());
         s3.deletebucket();
         // need to delete s3!!!
@@ -198,5 +206,45 @@ import remote.Manager;
         // need to delete clients!!
  		
 		System.out.println("Bye bye");
+	}
+ 
+//    public static void main(String[] args){
+//    	ArrayList<String> allLines = new ArrayList<String>();
+//    	allLines.add("Black;[PERSON: OBAMA];HI obama!!!!!");
+//    	allLines.add("LightGreen;[PERSON: TIM DUNCAN];Go spurs go! Timi is the king!");
+//    	allLines.add("Red;[LOCATION: PARIS]; sorry for paris :(");
+//    	createHTMLFile(allLines, "./myFirstHTML.html");
+//    	return;
+//    }
+	private static void createHTMLFile(ArrayList<String> allLines,
+			String outputFilePath) {
+		
+		String output = "<HTML>\n<HEAD>\n</HEAD>\n<BODY>\n";
+		for (String line : allLines) {
+			System.out.println("Line: " + line);
+			String sentiment  	= line.substring(0, line.indexOf(';'));
+			String entitiesAndTweet = line.substring(line.indexOf(';')+1, line.length());
+			String entities 	= entitiesAndTweet.substring(0, entitiesAndTweet.indexOf(';'));
+			String tweet 		= entitiesAndTweet.substring(entitiesAndTweet.indexOf(';')+1, entitiesAndTweet.length());
+			String rawTweet		= tweet.substring(tweet.indexOf('"')+1,tweet.lastIndexOf('"'));
+            output += "<p> <b><font color=\"" + sentiment + "\"> " + rawTweet + "</font></b> " + entities + "</p>\n";
+		}
+		output += "</BODY>\n</HTML>";
+		
+		if ( null == outputFilePath ) {
+			System.out.println(output);
+		} else {
+			try {
+				File file = new File (outputFilePath);
+				PrintWriter out = new PrintWriter(file);
+				out.println(output);
+				out.close();
+				System.out.println("Write html file to: "+ outputFilePath);
+			} catch (FileNotFoundException e) {
+				System.out.println("Failed to write to file: "+ outputFilePath);
+				System.out.println(output);
+			}
+		}
+		
 	}
  }

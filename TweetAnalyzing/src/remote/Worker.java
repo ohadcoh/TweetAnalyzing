@@ -74,7 +74,7 @@ public class Worker {
 			String tweet = new String("");
 			try {
 				tweetPage = Jsoup.connect(tweetLink).get();
-				tweet = tweetPage.select("title").first().text();
+				tweet = tweetPage.select("title").first().text().replace("\n", "").replace("\r", "");
 				numOfLinksOk++;
 			} catch (IOException e) {
 				numOfLinksBroken++;
@@ -86,9 +86,9 @@ public class Worker {
 			System.out.println("Tweet before analyzing: " + tweet);
 			// 5. analyze the tweet
 			Vector<String> entities = findEntities(tweet);
-			int sentimentColot = findSentiment(tweet);
+			String sentimentColot = findSentiment(tweet);
 			// 6. write message to output SQS
-			outputSQS.sendMessageType2(tweet+ ", " + sentimentColot + ", " + entities, taskId);
+			outputSQS.sendMessageType2(sentimentColot + ";" + entities + ";" + tweet, taskId);
 			// 7. delete message
 			inputSQS.deleteMessage(inputMessage);
 		}
@@ -129,7 +129,7 @@ public class Worker {
 	}
 
 	// find sentiment of a tweet
-	int findSentiment(String tweet) {
+	String findSentiment(String tweet) {
 		int mainSentiment = 0;
 		if (tweet != null && tweet.length() > 0) {
 			int longest = 0;
@@ -144,7 +144,20 @@ public class Worker {
 				}
 			}
 		}
-		return mainSentiment;
+		switch(mainSentiment){
+		case 0:
+			return "DarkRed";
+		case 1:
+			return "Red";
+		case 2:
+			return "Black";
+		case 3:
+			return "LightGreen";
+		case 4:
+			return "DarkGreen";
+		default:
+			return "Black";
+		}
 	}
 
 }

@@ -90,6 +90,7 @@ public class Manager {
     			workerToManager.deleteMessage(messagesList.get(0));
     			continue;
     		}
+
     		// find the right task id, and let it handle the input message
     		String msgTaskId = messagesList.get(0).getMessageAttributes().get("id").getStringValue();
     		// iterate over all tasks
@@ -97,6 +98,12 @@ public class Manager {
     			// if ids are equal
     			if(tempLoopTask.getId().equals(msgTaskId))
     			{
+    	    		// empty body
+    	    		if(messagesList.get(0).getBody() == "")
+    	    		{
+    	    			tempLoopTask.decrementRemainingCounter();
+    	    			break;
+    	    		}
     				// add this line to file in this task
     				tempLoopTask.addLineToFile(messagesList.get(0).getBody());
     				// if finished, delete this message, finish the task

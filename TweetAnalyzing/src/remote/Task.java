@@ -167,5 +167,10 @@ public class Task {
 	{
 		return terminate;
 	}
+
+	public void decrementRemainingCounter() {
+		this.remainingCounter--;
+		
+	}
 	
 }
