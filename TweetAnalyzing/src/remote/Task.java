@@ -23,9 +23,10 @@ public class Task {
 	//private SQS managerToLocal;
 	private boolean terminate;
 	private long counter;
+	private long remainingCounter;
 	private File outputFile;
 	private Writer writer;
-	private int numOfWorkers;
+	private int n;
 	
 	public Task(String id, SQS localToManager, SQS managerToLocal){
 		super();
@@ -33,7 +34,6 @@ public class Task {
 		this.localToManager = localToManager;
 		this.managerToLocal = managerToLocal;
 		this.terminate 		= false;
-		this.counter 		= 0;
 		//this.managerToLocal = new SQS(credentials, "managerToLocal" + String.valueOf(id));
 	}
 	
@@ -56,7 +56,7 @@ public class Task {
 		//localToManager.sendMessage(id);
 		
 		// 1.2 find attributes
-		numOfWorkers = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
+		n = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
 
 		System.out.println("numOfWorkers: " + inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
 		System.out.println("terminate: " + inputMessage.getMessageAttributes().get("terminate").getStringValue());
@@ -83,6 +83,7 @@ public class Task {
     		// send with id attribute
     		managerToWorker.sendMessageType2(line, id);
     		counter++;
+    		remainingCounter++;
     	}
     	try {
 			reader.close();
@@ -108,7 +109,7 @@ public class Task {
 		// write line and decrement the counter of the remaining lines to analyze
 		try {
 			writer.write(line + "\n");
-			this.counter--;
+			this.remainingCounter--;
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -134,8 +135,8 @@ public class Task {
 		return id;
 	}
 
-	public void setId(String id) {
-		this.id = id;
+	public int getN() {
+		return n;
 	}
 
 	public SQS getLocalToManager() {
@@ -158,8 +159,8 @@ public class Task {
 		return counter;
 	}
 
-	public void setCounter(long counter) {
-		this.counter = counter;
+	public long getRemainingCounter() {
+		return remainingCounter;
 	}
 	
 	public boolean getTerminate()

@@ -146,7 +146,7 @@ import remote.Manager;
 		}
 		
  		// for now - create manager
- 		Manager manager1 = new Manager(credentials, localToManager, managerToLocal, s3, 5);
+ 		Manager manager1 = new Manager(credentials, localToManager, managerToLocal, s3);
  		manager1.mainMethod();
  		
  		// 5. read your id
@@ -194,6 +194,7 @@ import remote.Manager;
         s3.deletebucket();
         // need to delete s3!!!
         localToManager.deleteQueue();
+        managerToLocal.deleteQueue();
         // need to delete clients!!
  		
 		System.out.println("Bye bye");

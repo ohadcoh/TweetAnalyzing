@@ -28,12 +28,14 @@ public class Worker {
 	private StanfordCoreNLP NERPipeline;
 	private SQS inputSQS;
 	private SQS outputSQS;
+	private int id;
 	private long numOfLinksHandled;
 	private long numOfLinksBroken;
 	private long numOfLinksOk;
 	
 	// initialize analyze tweets fields with the needed info haha
-	public Worker(AWSCredentials credentials, SQS _inputSQS, SQS _outputSQS) {
+	public Worker(AWSCredentials credentials, SQS _inputSQS, SQS _outputSQS, int _id) {
+		id = _id;
 		//init SQSs
 		inputSQS  = _inputSQS;
 		outputSQS = _outputSQS;
@@ -66,7 +68,7 @@ public class Worker {
 			Message inputMessage = inputMessageList.get(0);
 			String taskId = inputMessage.getMessageAttributes().get("id").getStringValue();
 			String tweetLink = inputMessage.getBody();
-			System.out.println("tweet link: " + tweetLink + " , jobID: " + taskId);
+			//System.out.println("tweet link: " + tweetLink + " , jobID: " + taskId);
 			Document tweetPage;
 			// 4. isolate tweet from link
 			String tweet = new String("");
@@ -90,6 +92,10 @@ public class Worker {
 			// 7. delete message
 			inputSQS.deleteMessage(inputMessage);
 		}
+//		System.out.println("Worker " + id + " handled: " + numOfLinksHandled + 
+//							". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.");
+		outputSQS.sendMessageWorkerFinished("Worker " + id + " handled: " + numOfLinksHandled + 
+							". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.", id);
 	}
 
 	// find named entities in a tweet
