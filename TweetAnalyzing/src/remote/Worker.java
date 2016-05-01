@@ -62,6 +62,7 @@ public class Worker {
 			if(inputMessageList.size() == 0)
 				break;
 			// 3. isolate id and link
+			numOfLinksHandled++;
 			Message inputMessage = inputMessageList.get(0);
 			String taskId = inputMessage.getMessageAttributes().get("id").getStringValue();
 			String tweetLink = inputMessage.getBody();
@@ -72,9 +73,12 @@ public class Worker {
 			try {
 				tweetPage = Jsoup.connect(tweetLink).get();
 				tweet = tweetPage.select("title").first().text();
+				numOfLinksOk++;
 			} catch (IOException e) {
+				numOfLinksBroken++;
 				e.printStackTrace();
 			} catch (IllegalArgumentException e) {
+				numOfLinksBroken++;
 				e.printStackTrace();
 			}
 			System.out.println("Tweet before analyzing: " + tweet);
