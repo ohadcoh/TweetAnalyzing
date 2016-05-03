@@ -31,7 +31,7 @@ public class SQS {
 	        System.out.println("Creating a new SQS queue called " + queueName + "\n");
 	        CreateQueueRequest createQueueRequest = new CreateQueueRequest(queueName);
 	        this.url = sqs.createQueue(createQueueRequest).getQueueUrl();
-	        System.out.println("Queue URL:" + this.url);
+	        //System.out.println("Queue URL:" + this.url);
 		} catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it " +
 	                "to Amazon SQS, but was rejected with an error response for some reason.");
@@ -49,15 +49,14 @@ public class SQS {
 	}
 
 	
-	public void sendMessageType1(String message, String terminate, String numOfWorkers){
+	public int sendMessageWithNumOfWorkers(String message, String numOfWorkers){
 		try{
-	        System.out.println("Sending message type 1.\n");
-	        MessageAttributeValue terminateValue 	= new MessageAttributeValue().withDataType("String").withStringValue(terminate);
+	        //System.out.println("Sending message with num of workers.\n");
 	        MessageAttributeValue numOfWorkersValue = new MessageAttributeValue().withDataType("String").withStringValue(numOfWorkers);
 	        SendMessageRequest messageRequest = new SendMessageRequest(url, message).
-	        		addMessageAttributesEntry("terminate", terminateValue).
 	        		addMessageAttributesEntry("numOfWorkers", numOfWorkersValue);
 	        sqs.sendMessage(messageRequest);
+	        return 0;
 		} catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it " +
 	                "to Amazon SQS, but was rejected with an error response for some reason.");
@@ -66,21 +65,24 @@ public class SQS {
 	        System.out.println("AWS Error Code:   " + ase.getErrorCode());
 	        System.out.println("Error Type:       " + ase.getErrorType());
 	        System.out.println("Request ID:       " + ase.getRequestId());
+	        return 1;
 	    	} catch (AmazonClientException ace) {
 	        System.out.println("Caught an AmazonClientException, which means the client encountered " +
 	                "a serious internal problem while trying to communicate with SQS, such as not " +
 	                "being able to access the network.");
 	        System.out.println("Error Message: " + ace.getMessage());
+	        return 2;
     	}
 	}
 	
-	public void sendMessageType2(String message, String id){
+	public int sendMessageWithId(String message, String id){
 		try{
-	        System.out.println("Sending message type 2.\n");
+	        //System.out.println("Sending message with id.\n");
 	        MessageAttributeValue idValue 	= new MessageAttributeValue().withDataType("String").withStringValue(id);
 	        SendMessageRequest messageRequest = new SendMessageRequest(url, message).
 	        		addMessageAttributesEntry("id", idValue);
 	        sqs.sendMessage(messageRequest);
+	        return 0;
 		} catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it " +
 	                "to Amazon SQS, but was rejected with an error response for some reason.");
@@ -89,18 +91,21 @@ public class SQS {
 	        System.out.println("AWS Error Code:   " + ase.getErrorCode());
 	        System.out.println("Error Type:       " + ase.getErrorType());
 	        System.out.println("Request ID:       " + ase.getRequestId());
+	        return 1;
 	    	} catch (AmazonClientException ace) {
 	        System.out.println("Caught an AmazonClientException, which means the client encountered " +
 	                "a serious internal problem while trying to communicate with SQS, such as not " +
 	                "being able to access the network.");
 	        System.out.println("Error Message: " + ace.getMessage());
+	        return 2;
     	}
 	}
 	
-	public void sendMessage(String message){
+	public int sendMessage(String message){
 		try{
-	        System.out.println("Sending a message.\n");
+	        //System.out.println("Sending a message.\n");
 	        sqs.sendMessage(new SendMessageRequest(url, message));
+	        return 0;
 		} catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it " +
 	                "to Amazon SQS, but was rejected with an error response for some reason.");
@@ -109,21 +114,24 @@ public class SQS {
 	        System.out.println("AWS Error Code:   " + ase.getErrorCode());
 	        System.out.println("Error Type:       " + ase.getErrorType());
 	        System.out.println("Request ID:       " + ase.getRequestId());
+	        return 1;
 	    	} catch (AmazonClientException ace) {
 	        System.out.println("Caught an AmazonClientException, which means the client encountered " +
 	                "a serious internal problem while trying to communicate with SQS, such as not " +
 	                "being able to access the network.");
 	        System.out.println("Error Message: " + ace.getMessage());
+	        return 2;
     	}
 	}
 	
-	public void sendMessageWorkerFinished(String message, int id) {
+	public int sendMessageWorkerFinished(String message, int id) {
 		try{
 	        //System.out.println("Sending message worker finished.\n");
 	        MessageAttributeValue idValue 	= new MessageAttributeValue().withDataType("String").withStringValue(String.valueOf(id));
 	        SendMessageRequest messageRequest = new SendMessageRequest(url, message).
 	        		addMessageAttributesEntry("workerId", idValue);
 	        sqs.sendMessage(messageRequest);
+	        return 0;
 		} catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it " +
 	                "to Amazon SQS, but was rejected with an error response for some reason.");
@@ -132,11 +140,42 @@ public class SQS {
 	        System.out.println("AWS Error Code:   " + ase.getErrorCode());
 	        System.out.println("Error Type:       " + ase.getErrorType());
 	        System.out.println("Request ID:       " + ase.getRequestId());
+	        return 1;
 	    	} catch (AmazonClientException ace) {
 	        System.out.println("Caught an AmazonClientException, which means the client encountered " +
 	                "a serious internal problem while trying to communicate with SQS, such as not " +
 	                "being able to access the network.");
 	        System.out.println("Error Message: " + ace.getMessage());
+	        return 2;
+    	}
+		
+	}
+	
+	public int sendMessageWithIdAndTerminate(String message, String id) {
+		try{
+	        //System.out.println("Sending message worker finished.\n");
+	        MessageAttributeValue idValue 	= new MessageAttributeValue().withDataType("String").withStringValue(String.valueOf(id));
+	        MessageAttributeValue terminateValue 	= new MessageAttributeValue().withDataType("String").withStringValue("true");
+
+	        SendMessageRequest messageRequest = new SendMessageRequest(url, message).
+	        		addMessageAttributesEntry("id", idValue).addMessageAttributesEntry("terminate", terminateValue);
+	        sqs.sendMessage(messageRequest);
+	        return 0;
+		} catch (AmazonServiceException ase) {
+	        System.out.println("Caught an AmazonServiceException, which means your request made it " +
+	                "to Amazon SQS, but was rejected with an error response for some reason.");
+	        System.out.println("Error Message:    " + ase.getMessage());
+	        System.out.println("HTTP Status Code: " + ase.getStatusCode());
+	        System.out.println("AWS Error Code:   " + ase.getErrorCode());
+	        System.out.println("Error Type:       " + ase.getErrorType());
+	        System.out.println("Request ID:       " + ase.getRequestId());
+	        return 1;
+	    	} catch (AmazonClientException ace) {
+	        System.out.println("Caught an AmazonClientException, which means the client encountered " +
+	                "a serious internal problem while trying to communicate with SQS, such as not " +
+	                "being able to access the network.");
+	        System.out.println("Error Message: " + ace.getMessage());
+	        return 2;
     	}
 		
 	}
@@ -153,8 +192,8 @@ public class SQS {
 	    				withMessageAttributeNames("workerId").
 	    				withAttributeNames("All");
 	    	List<Message> messages = sqs.receiveMessage(receiveMessageRequest).getMessages();
-	    	if(messages.size() != 0)
-	    		System.out.println("Receiving messages: " + messages.size() + ".\n");
+	    	//if(messages.size() != 0)
+	    	//	System.out.println("Receiving messages: " + messages.size() + ".\n");
 
 	    	return messages;
 		} catch (AmazonServiceException ase) {
@@ -184,8 +223,8 @@ public class SQS {
 	    				withMessageAttributeNames("terminate").
 	    				withMessageAttributeNames("numOfWorkers");
 	    	List<Message> messages = sqs.receiveMessage(receiveMessageRequest).getMessages();
-	    	if(messages.size() != 0)
-	    		System.out.println("Receiving message.\n");
+	    	//if(messages.size() != 0)
+	    	//	System.out.println("Receiving message.\n");
 
 	    	return messages;
 		} catch (AmazonServiceException ase) {
@@ -249,9 +288,5 @@ public class SQS {
 	        System.out.println("Error Message: " + ace.getMessage());
     	}
 	}
-
-
-
-
 
 }

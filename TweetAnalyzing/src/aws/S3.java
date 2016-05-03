@@ -73,7 +73,7 @@ public class S3 {
 	
 	public S3Object downloadFile(String key){
 		try{
-            System.out.println("Downloading an object");
+            //System.out.println("Downloading an object");
             S3Object object = s3.getObject(new GetObjectRequest(bucketName, key));
             //System.out.println("Content-Type: "  + object.getObjectMetadata().getContentType());
             //displayTextInputStream(object.getObjectContent());
@@ -100,7 +100,7 @@ public class S3 {
 	
 	public void deleteFile(String key){
 		try{
-	        System.out.println("Deleting an object\n");
+	        //System.out.println("Deleting an object\n");
 	        s3.deleteObject(bucketName, key);
 		}catch (AmazonServiceException ase) {
 	        System.out.println("Caught an AmazonServiceException, which means your request made it "

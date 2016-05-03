@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
-import java.util.List;
 
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.sqs.model.Message;
@@ -20,8 +19,6 @@ public class Task {
 	private String id;
 	private SQS localToManager;
 	private SQS managerToLocal;
-	//private SQS managerToLocal;
-	private boolean terminate;
 	private long counter;
 	private long remainingCounter;
 	private File outputFile;
@@ -33,36 +30,19 @@ public class Task {
 		this.id 			= id;
 		this.localToManager = localToManager;
 		this.managerToLocal = managerToLocal;
-		this.terminate 		= false;
-		//this.managerToLocal = new SQS(credentials, "managerToLocal" + String.valueOf(id));
 	}
 	
-	public int startTask(S3 s3, SQS managerToWorker)
+	public int startTask(S3 s3, SQS managerToWorker, Message inputMessage)
 	{
 		
-		// 1.1 read input message, send to local its queue (keep reading until receive request)
-		List<Message> inputMessageList;
-		do{
-			inputMessageList = localToManager.getMessages(1);
-			try {
-				Thread.sleep(500);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}while(inputMessageList.size() == 0);
-		Message	inputMessage = inputMessageList.get(0);
-		localToManager.deleteMessage(inputMessage);
+		
 		// 1.2 send to local its id
-		//localToManager.sendMessage(id);
+		managerToLocal.sendMessageWithId("Your ID is: ",id);
 		
 		// 1.2 find attributes
 		n = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
 
-		System.out.println("numOfWorkers: " + inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
-		System.out.println("terminate: " + inputMessage.getMessageAttributes().get("terminate").getStringValue());
-		
-		if(inputMessage.getMessageAttributes().get("terminate").getStringValue().equals("true"))
-			terminate = true;
+		System.out.println("Task " + id + ": numOfWorkers: " + inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
 		
 		// 2. download input file, delete it from s3
 		S3Object inputFile = s3.downloadFile(inputMessage.getBody());
@@ -81,7 +61,7 @@ public class Task {
     		if (line == null || line.length() == 0)
     			break;
     		// send with id attribute
-    		managerToWorker.sendMessageType2(line, id);
+    		managerToWorker.sendMessageWithId(line, id);
     		counter++;
     		remainingCounter++;
     	}
@@ -126,8 +106,9 @@ public class Task {
 			e.printStackTrace();
 		}
 		String outputFileS3key = s3.uploadFile("./managerOutputFile" + this.id);
-		System.out.println("Tasks output File Uploaded\n");
-		managerToLocal.sendMessageType2(outputFileS3key, id);
+		outputFile.delete();
+		System.out.println("Task " + id + ": output File Uploaded\n");
+		managerToLocal.sendMessageWithId(outputFileS3key, id);
 		//managerToLocal.deleteQueue();
 	}
 	
@@ -147,14 +128,6 @@ public class Task {
 		this.localToManager = localToManager;
 	}
 
-	public boolean isTerminate() {
-		return terminate;
-	}
-
-	public void setTerminate(boolean terminate) {
-		this.terminate = terminate;
-	}
-
 	public long getCounter() {
 		return counter;
 	}
@@ -163,11 +136,6 @@ public class Task {
 		return remainingCounter;
 	}
 	
-	public boolean getTerminate()
-	{
-		return terminate;
-	}
-
 	public void decrementRemainingCounter() {
 		this.remainingCounter--;
 		

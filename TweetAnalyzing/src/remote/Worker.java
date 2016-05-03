@@ -83,12 +83,12 @@ public class Worker {
 				numOfLinksBroken++;
 				e.printStackTrace();
 			}
-			System.out.println("Tweet before analyzing: " + tweet);
+			//System.out.println("Worker " + id + ": Tweet before analyzing: " + tweet);
 			// 5. analyze the tweet
 			Vector<String> entities = findEntities(tweet);
 			String sentimentColot = findSentiment(tweet);
 			// 6. write message to output SQS
-			outputSQS.sendMessageType2(sentimentColot + ";" + entities + ";" + tweet, taskId);
+			outputSQS.sendMessageWithId(sentimentColot + ";" + entities + ";" + tweet, taskId);
 			// 7. delete message
 			inputSQS.deleteMessage(inputMessage);
 		}

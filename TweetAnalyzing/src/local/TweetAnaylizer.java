@@ -3,15 +3,9 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.Writer;
-import java.util.UUID;
-
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Element;
+//import java.util.UUID;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -39,9 +33,9 @@ import remote.Manager;
 // local application- first assignment in DSPS course
  public class TweetAnaylizer{
 
-	private static String bucketName = "dspsass1bucket" + UUID.randomUUID();
-	private static String localToManagerQueueName = "localtomanager" + UUID.randomUUID();
-	private static String managerToLocalQueueName = "managerToLocal" + UUID.randomUUID();
+	private static String bucketName = "dspsass1bucketasafohad";
+	private static String localToManagerQueueName = "localtomanagerasafohad";
+	private static String managerToLocalQueueName = "managerToLocalasafohad";
 
 	private static String propertiesFilePath = "./ohadInfo.properties";
 	private static AmazonEC2 ec2;
@@ -96,12 +90,12 @@ import remote.Manager;
             CreateTagsRequest createTagsRequest = new CreateTagsRequest().
             		withResources(instances.get(0).getInstanceId()).withTags(new Tag("Name", "Manager"));
             ec2.createTags(createTagsRequest);
-            System.out.println("Launch instances: " + instances.get(0).getInstanceId());
+            System.out.println("LocalApp: Launch instances: " + instances.get(0).getInstanceId());
             // temporary terminate
             TerminateInstancesRequest termintateManagerRequest = 
             		new TerminateInstancesRequest().withInstanceIds(instances.get(0).getInstanceId());
             ec2.terminateInstances(termintateManagerRequest);
-            System.out.println("Terminate instances: " + instances.get(0).getInstanceId());
+            System.out.println("LocalApp: Terminate instances: " + instances.get(0).getInstanceId());
  
         } catch (AmazonServiceException ase) {
             System.out.println("Caught Exception: " + ase.getMessage());
@@ -117,7 +111,7 @@ import remote.Manager;
     	int argsNum = args.length;
     	if(argsNum != 3 && argsNum != 4 )
     	{
-    		System.out.println("Usage: inputFileName outputFileName n terminate(optional)");
+    		System.out.println("LocalApp: Usage: inputFileName outputFileName n terminate(optional)");
     		return;
     	}
 
@@ -130,20 +124,20 @@ import remote.Manager;
 		
 		// 1. creating credentials and ec2 client
 		AWSCredentials credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
- 		System.out.println("Credentials created.");
+ 		System.out.println("LocalApp: Credentials created.");
  	 	ec2 = new AmazonEC2Client(credentials);
  		
  		// 2. uploading the input file to S3
  		S3 s3 = new S3(credentials, bucketName);
  		String inputFileS3key = s3.uploadFile(inputFileName);
- 		System.out.println("File Uploaded\n");
+ 		System.out.println("LocalApp: File Uploaded\n");
  		
  		// 3. create queue (from local app to manager) and send message with the key of the file
  		SQS localToManager = new SQS(credentials, localToManagerQueueName);
  		SQS managerToLocal = new SQS(credentials, managerToLocalQueueName);
  		
  		// 4. send with attributes (terminate and numOfWorkers)
- 		localToManager.sendMessageType1(inputFileS3key, Boolean.toString(terminate), String.valueOf(numOfWorkers));
+ 		localToManager.sendMessageWithNumOfWorkers(inputFileS3key, String.valueOf(numOfWorkers));
  		
 		// 5. find if there is manager instance
 		if (!checkIfManagerExist())
@@ -153,33 +147,49 @@ import remote.Manager;
 		}
 		
  		// for now - create manager
- 		Manager manager1 = new Manager(credentials, localToManager, managerToLocal, s3);
- 		manager1.mainMethod();
+ 		Runnable manager1 = new Manager(credentials, localToManager, managerToLocal, s3);
+ 		new Thread(manager1).start();
+ 		//manager1.run();
  		
  		// 5. read your id
-// 		List<Message> idMessages = localToManager.getMessages(2);
-// 		id = idMessages.get(0).getBody();
-// 		System.out.println("id0: " + id);
-// 		id = idMessages.get(1).getBody();
-// 		System.out.println("id1: " + id);
-// 		localToManager.deleteMessage(idMessages.get(0));
+ 		try {
+			Thread.sleep(1000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+ 		System.out.println("LocalApp: after first sleep");
+ 		List<Message> inputMessageList;
+		do{
+			inputMessageList = managerToLocal.getMessages(1);
+			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}while(inputMessageList.size() == 0);
+		Message	idMessages = inputMessageList.get(0);
+ 		String body = idMessages.getBody();
+ 		String id = idMessages.getMessageAttributes().get("id").getStringValue();
+ 		System.out.println("LocalApp: Body: " + body + "id: " + id);
+ 		managerToLocal.deleteMessage(idMessages);
+
+
  		
  		// 6. read message
  		// read until receive answer from manager
  		List<Message> messageFromManagerList;
  		do{
  			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
- 			if(messageFromManagerList.size() != 0)
- 			{
- 				//if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
- 					break;
- 			}
- 				
- 			Thread.sleep(5000);
- 		}while(true);
+ 			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+ 			//if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
+ 		}while(messageFromManagerList.size() == 0 );
  		Message messageFromManager = messageFromManagerList.get(0);
  		managerToLocal.deleteMessage(messageFromManagerList.get(0));
-        System.out.println("Message from Manager with my id: " + messageFromManager.getBody());
+        System.out.println("LocalApp: Message from Manager with my id: " + messageFromManager.getBody());
  		
         // 7. download the output file, write it to HTML and delete it        
         S3Object outputFile = s3.downloadFile(messageFromManager.getBody());
@@ -198,6 +208,16 @@ import remote.Manager;
     	reader.close();
     	createHTMLFile(allOutputLines, outputFileName+".html");
     	
+    	// send termination message to manager
+    	if(terminate)
+    	{
+    		localToManager.sendMessageWithIdAndTerminate("I am terminating you!", id);
+    	}
+ 		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
         s3.deleteFile(messageFromManager.getBody());
         s3.deletebucket();
         // need to delete s3!!!
@@ -205,23 +225,17 @@ import remote.Manager;
         managerToLocal.deleteQueue();
         // need to delete clients!!
  		
-		System.out.println("Bye bye");
+		System.out.println("LocalApp: Bye bye");
 	}
+    
  
-//    public static void main(String[] args){
-//    	ArrayList<String> allLines = new ArrayList<String>();
-//    	allLines.add("Black;[PERSON: OBAMA];HI obama!!!!!");
-//    	allLines.add("LightGreen;[PERSON: TIM DUNCAN];Go spurs go! Timi is the king!");
-//    	allLines.add("Red;[LOCATION: PARIS]; sorry for paris :(");
-//    	createHTMLFile(allLines, "./myFirstHTML.html");
-//    	return;
-//    }
+
 	private static void createHTMLFile(ArrayList<String> allLines,
 			String outputFilePath) {
 		
 		String output = "<HTML>\n<HEAD>\n</HEAD>\n<BODY>\n";
 		for (String line : allLines) {
-			System.out.println("Line: " + line);
+			//System.out.println("Line: " + line);
 			String sentiment  	= line.substring(0, line.indexOf(';'));
 			String entitiesAndTweet = line.substring(line.indexOf(';')+1, line.length());
 			String entities 	= entitiesAndTweet.substring(0, entitiesAndTweet.indexOf(';'));
@@ -239,9 +253,9 @@ import remote.Manager;
 				PrintWriter out = new PrintWriter(file);
 				out.println(output);
 				out.close();
-				System.out.println("Write html file to: "+ outputFilePath);
+				System.out.println("LocalApp: Write html file to: "+ outputFilePath);
 			} catch (FileNotFoundException e) {
-				System.out.println("Failed to write to file: "+ outputFilePath);
+				System.out.println("LocalApp: Failed to write to file: "+ outputFilePath);
 				System.out.println(output);
 			}
 		}
