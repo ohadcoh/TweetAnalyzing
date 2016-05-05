@@ -1,14 +1,25 @@
 package remote;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.*;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.util.List;
+import java.util.Properties;
+import java.util.UUID;
+import java.util.Vector;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
 import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.sqs.model.Message;
-
+import aws.S3;
 import aws.SQS;
+
 import edu.stanford.nlp.ling.CoreAnnotations;
 import edu.stanford.nlp.ling.CoreAnnotations.NamedEntityTagAnnotation;
 import edu.stanford.nlp.ling.CoreAnnotations.SentencesAnnotation;
@@ -26,28 +37,57 @@ public class Worker {
 	// fields related to tweet analyzing
 	private StanfordCoreNLP sentimentPipeline;
 	private StanfordCoreNLP NERPipeline;
+	// AWS
+	private AWSCredentials credentials;
 	private SQS inputSQS;
 	private SQS outputSQS;
-	private int id;
+	private S3 s3;
+	// Local info
+	private String id;
 	private long numOfLinksHandled;
 	private long numOfLinksBroken;
 	private long numOfLinksOk;
 	
-	// initialize analyze tweets fields with the needed info haha
-	public Worker(AWSCredentials credentials, SQS _inputSQS, SQS _outputSQS, int _id) {
-		id = _id;
-		//init SQSs
-		inputSQS  = _inputSQS;
-		outputSQS = _outputSQS;
-		// init properties for processing
+//	public static void main(String[] args)
+//	{
+//		// hard coded names
+//		String propertiesFilePath 		= "./ohadInfo.properties";
+//		String inputSQSQueueName		= "managertoworkerasafohad";
+//		String outputSQSQueueName		= "workerToManagerasafohad";
+//		String statisticsBucketName 	= "workersstatisticsasafohad";
+//		// create new worker
+//		Worker myWorker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
+//		myWorker.analyzeTweet();
+//	}
+	
+	protected Worker(	String propertiesFilePath, 
+					String statisticsBucketName, 
+					String inputSQSQueueName,
+					String outputSQSQueueName) {
+		// 0. create id
+		id = UUID.randomUUID().toString();
+		// 1. creating credentials
+		try {
+			credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+			return;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
+		// 2. create s3 client for statistics
+		s3 = new S3(credentials, statisticsBucketName);
+		// 3. create sqs client and two queues
+		inputSQS = new SQS(credentials, inputSQSQueueName);
+		outputSQS = new SQS(credentials, outputSQSQueueName);
+		// 4. init properties for processing
 		Properties propsSentiment = new Properties();
 		propsSentiment.put("annotators", "tokenize, ssplit, parse, sentiment");
 		sentimentPipeline = new StanfordCoreNLP(propsSentiment);
-
 		Properties propsEntities = new Properties();
 		propsEntities.put("annotators", "tokenize , ssplit, pos, lemma, ner");
 		NERPipeline = new StanfordCoreNLP(propsEntities);
-		
 		// init statistics
 		numOfLinksHandled 	= 0;
 		numOfLinksBroken	= 0;
@@ -55,20 +95,27 @@ public class Worker {
 	}
 	
 	public void analyzeTweet() {
-		
 		while(true){
 			// 1. read message from SQS
 			List<Message> inputMessageList = inputSQS.getMessages(1);
 			// 2. if queue empty finish
-			// TODO: handle termination properly 
 			if(inputMessageList.size() == 0)
+			{
+				try {
+					Thread.sleep(500);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+				continue;
+			}
+			// 2. check if terminated request
+			if(inputMessageList.get(0).getMessageAttributes().get("terminate") != null)
 				break;
 			// 3. isolate id and link
 			numOfLinksHandled++;
 			Message inputMessage = inputMessageList.get(0);
 			String taskId = inputMessage.getMessageAttributes().get("id").getStringValue();
 			String tweetLink = inputMessage.getBody();
-			//System.out.println("tweet link: " + tweetLink + " , jobID: " + taskId);
 			Document tweetPage;
 			// 4. isolate tweet from link
 			String tweet = new String("");
@@ -83,23 +130,34 @@ public class Worker {
 				numOfLinksBroken++;
 				e.printStackTrace();
 			}
-			//System.out.println("Worker " + id + ": Tweet before analyzing: " + tweet);
 			// 5. analyze the tweet
 			Vector<String> entities = findEntities(tweet);
-			String sentimentColot = findSentiment(tweet);
+			String sentimentColor = findSentiment(tweet);
 			// 6. write message to output SQS
-			outputSQS.sendMessageWithId(sentimentColot + ";" + entities + ";" + tweet, taskId);
+			outputSQS.sendMessageWithId(sentimentColor + ";" + entities + ";" + tweet, taskId);
 			// 7. delete message
 			inputSQS.deleteMessage(inputMessage);
 		}
-//		System.out.println("Worker " + id + " handled: " + numOfLinksHandled + 
-//							". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.");
+
+		try {
+			File statistics = new File("statisticsOfWorker" + id + ".txt");
+			Writer writer = new OutputStreamWriter(new FileOutputStream(statistics));
+			writer.write("Worker " + id + " handled: " + numOfLinksHandled + 
+					". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.");
+			writer.close();
+			s3.uploadFile("statisticsOfWorker" + id + ".txt");
+		} catch (IOException e) {
+			e.printStackTrace();
+			outputSQS.sendMessageError("Statistics IO exception", id);
+			return;
+		}
+		
 		outputSQS.sendMessageWorkerFinished("Worker " + id + " handled: " + numOfLinksHandled + 
-							". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.", id);
+				". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.", id);
 	}
 
 	// find named entities in a tweet
-	Vector<String> findEntities(String tweet) {
+	private Vector<String> findEntities(String tweet) {
 		// create an empty Annotation just with the given text
 		Annotation document = new Annotation(tweet);
 
@@ -129,7 +187,7 @@ public class Worker {
 	}
 
 	// find sentiment of a tweet
-	String findSentiment(String tweet) {
+	private String findSentiment(String tweet) {
 		int mainSentiment = 0;
 		if (tweet != null && tweet.length() > 0) {
 			int longest = 0;

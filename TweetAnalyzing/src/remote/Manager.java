@@ -1,79 +1,252 @@
 package remote;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.PrintWriter;
+import java.io.RandomAccessFile;
 import java.util.List;
-import java.util.UUID;
-import java.util.Vector;
 
 import com.amazonaws.auth.AWSCredentials;
+import com.amazonaws.auth.PropertiesCredentials;
+import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.sqs.model.Message;
 
+import aws.EC2;
 import aws.S3;
 import aws.SQS;
 
 public class Manager implements Runnable{
+	// AWS
 	private AWSCredentials credentials;
 	private SQS localToManager;
 	private SQS managerToLocal;
 	private SQS managerToWorker;
 	private SQS workerToManager;
-	
 	private S3 s3;
-	
-	private long gCounter;
+	private EC2 ec2;
+	// internal info
 	private int gNumOfWorkers;
-	private Vector<Task> tasks;
+	private int numberOfOpenTasks;
 	// control booleans
 	private boolean gTerminate;
-	// variable for 
+	// variable for threads
 	private Runnable readInputFromWorkers;
-	private boolean threadIsAlive;
+	
+	public static void main(String[] args)
+	{
+		// hard coded names
+		String propertiesFilePath 				= "./ohadInfo.properties";
+		String localToManagerSQSQueueName		= "localtomanagerasafohad";
+		String managerToLocalSQSQueueName		= "managerToLocalasafohad";
+		String s3BucketName						= "dspsass1bucketasafohad";
+		String managerToWorkerSQSQueueName		= "managertoworkerasafohad";
+		String workerToManagerSQSQueueName		= "workerToManagerasafohad";
+		// create manager instance
+		Manager myManager = new Manager(propertiesFilePath,
+										localToManagerSQSQueueName,
+										managerToLocalSQSQueueName,
+										s3BucketName,
+										managerToWorkerSQSQueueName,
+										workerToManagerSQSQueueName);
+		// run manager
+		myManager.run();
+		// terminate manager
+		myManager.terminate();
+	}
 	
 	// constructor
-	public Manager(AWSCredentials _credentials, SQS _localToManager, SQS _managerToLocal, S3 _s3) throws FileNotFoundException, IOException {
-		// parse all input argument to the needed variables
-		super();
-		credentials =_credentials;
-		localToManager = _localToManager;
-		managerToLocal = _managerToLocal;
-		// 3. uploading the input file to S3
-		s3 = _s3;
-		// 4. assign number of worker for this manager
+	public Manager( String propertiesFilePath,
+					String localToManagerSQSQueueName,
+					String managerToLocalSQSQueueName,
+					String s3BucketName,
+					String managerToWorkerSQSQueueName,
+					String workerToManagerSQSQueueName){
+		// 1. creating credentials
+		try {
+			credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+			return;
+		} catch (IOException e) {
+			e.printStackTrace();
+			return;
+		}
+		// 2. creating all AWS
+		localToManager 	= new SQS(credentials, localToManagerSQSQueueName);
+		managerToLocal 	= new SQS(credentials, managerToLocalSQSQueueName);
+		managerToWorker = new SQS(credentials, managerToWorkerSQSQueueName);
+		workerToManager = new SQS(credentials, workerToManagerSQSQueueName);
+		s3 				= new S3(credentials, s3BucketName);
+		ec2				= new EC2(credentials);
+		//ec2				= new EC2();
+		// 4. init internal info
+		numberOfOpenTasks = 0;
 		gNumOfWorkers 	= 0;
-		gCounter		= 0;
-		// 5. create queues ManagerToWorker and workerToManager
-		managerToWorker = new SQS(credentials, "managertoworker" + UUID.randomUUID());
-		workerToManager = new SQS(credentials, "workerToManager" + UUID.randomUUID());
-		// on init no terminate
-		gTerminate		= false; // this variable is for terminating manager
-		// init thread for reading input from worker
-		readInputFromWorkers = new Runnable() {
+		gTerminate		= false; // on init no terminate
+		readInputFromWorkers = new Runnable() { // init thread for reading input from worker
             public void run() {
                 Manager.this.readInputFromWorkers();
             }
         };
-        threadIsAlive = false;
-		
-		// 6. init tasks list
-		tasks = new Vector<Task>();	
 	}
 
 	// run the manager
 	public void run() {
-		// this methods also creates thread for reading from workers
-		readFromLocalApps();
-		terminateManager();
+		// create and run thread for reading messages from workers
+		Thread workersThread = new Thread(readInputFromWorkers);
+		workersThread.start();
 		
+		// this thread will read from local applications queue
+		readFromLocalApps();
+		
+		// wait for other thread to finish
+		try {
+			workersThread.join();
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		return;
 	}
+
+	// handle queue from local applications
+	private int readFromLocalApps(){
+		while(!gTerminate)
+		{
+			// 1. read input message (keep reading until receive request)
+			List<Message> inputMessageList;
+			do{
+				inputMessageList = localToManager.getMessages(1);
+				try {
+					Thread.sleep(500);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}while(inputMessageList.size() == 0);
+			Message	inputMessage = inputMessageList.get(0);
+			System.out.println("Manager: received: " + inputMessageList.get(0).getBody());
+			localToManager.deleteMessage(inputMessage);
+			// 2. check if it is termination message
+			if(inputMessage.getMessageAttributes().get("terminate") != null)
+			{
+				// TODO: return message to local app
+				// terminate
+				gTerminate = true;
+				return 0;
+			}
+			// 3. if not terminate- request for new task
+			int tempN = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
+			String tempId = inputMessage.getMessageAttributes().get("id").getStringValue();
+			Long tempTaskCounter = parseNewTask(inputMessage, tempId);
+			int neededWorkers = (int) (tempTaskCounter/tempN - gNumOfWorkers);
+			// if need to launch more workers 
+			if(neededWorkers > 0)
+			{
+				System.out.println("Manager: Creating " + neededWorkers + " workers.");
+				ec2.startWorkerInstances(neededWorkers);
+				gNumOfWorkers += neededWorkers;
+			}
+
+//	    	// start workers
+//	    	// requests from AWS- for now create one worker
+//			String propertiesFilePath 		= "./ohadInfo.properties";
+//			String inputSQSQueueName		= "managertoworkerasafohad";
+//			String outputSQSQueueName		= "workerToManagerasafohad";
+//			String statisticsBucketName 	= "workersstatisticsasafohad";
+//	    	Worker worker11 = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
+//	    	worker11.analyzeTweet();
+//	    	System.out.println("Worker Finishes!");
+			
+		}
+		return 0;
+
+	}
 	
+	// add task to the manager
+	private Long parseNewTask(Message inputMessage, String taskId)
+	{
+		// download file
+		S3Object inputFile = s3.downloadFile(inputMessage.getBody());
+		s3.deleteFile(inputMessage.getBody());
+		// create file with the id name, 
+		File tempFile = new File("./" + taskId + "OutputFile.txt");
+		try {
+			tempFile.createNewFile();
+		} catch (IOException e2) {
+			e2.printStackTrace();
+		}
+		// read how many lines, 
+		long numOfLines = 0;// = countLines(inputFile.getObjectContent());
+		// add all lines to workers queue
+		BufferedReader reader = new BufferedReader(new InputStreamReader(inputFile.getObjectContent()));
+    	while (true) {          
+    		String line = "";
+			try {
+				line = reader.readLine();
+			} catch (IOException e) {
+				e.printStackTrace();
+				return (long) -1;
+			}           
+    		if (line == null || line.length() == 0)
+    			break;
+    		// send with id attribute
+    		managerToWorker.sendMessageWithId(line, taskId);
+    		numOfLines++;
+    	}
+    	try {
+			reader.close();
+		} catch (IOException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+			return (long) -1;
+		}
+    	numberOfOpenTasks++;
+		return numOfLines;
+	}
 	
-	protected void readInputFromWorkers() {
-		// 1. update that this thread is alive
-		threadIsAlive = true;
-		// 2. check if last task finished- dont enter
-    	while ((tasks.size() != 0) && (gTerminate == false)) {
+	// terminate manager
+	private void terminate(){
+		// close all workers and wait for them to finish properly 
+		
+ 		// finish process
+    	managerToWorker.deleteQueue();
+    	workerToManager.deleteQueue();
+    	System.out.println("Manager: finished");
+	}
+    
+    public long countLines(String filename) throws IOException {
+    	// was taken from stack overflow
+        InputStream is = new BufferedInputStream(new FileInputStream(filename));
+        try {
+            byte[] c = new byte[1024];
+            long count = 0;
+            int readChars = 0;
+            boolean empty = true;
+            while ((readChars = is.read(c)) != -1) {
+                empty = false;
+                for (int i = 0; i < readChars; ++i) {
+                    if (c[i] == '\n') {
+                        ++count;
+                    }
+                }
+            }
+            return (count == 0 && !empty) ? 1 : count;
+        } finally {
+            is.close();
+        }
+    }
+    
+	// read workers queue and parse the messages
+	private void readInputFromWorkers() {
+		// run until terminate request arrived ***AND*** all tasks were handled and finished
+    	while ((numberOfOpenTasks != 0) || (gTerminate == false)) {
     		// read one message
     		List<Message>  messagesList = workerToManager.getMessages(1);
     		// if no input messages- sleep a while and try again
@@ -96,155 +269,100 @@ public class Manager implements Runnable{
     			continue;
     		}
 
-    		// find the right task id, and let it handle the input message
     		String msgTaskId = messagesList.get(0).getMessageAttributes().get("id").getStringValue();
-    		// iterate over all tasks
-    		for(Task tempLoopTask: tasks){
-    			// if ids are equal
-    			if(tempLoopTask.getId().equals(msgTaskId))
-    			{
-    	    		// empty body
-    	    		if(messagesList.get(0).getBody() == "")
-    	    		{
-    	    			tempLoopTask.decrementRemainingCounter();
-    	    			break;
-    	    		}
-    				// add this line to file in this task
-    				tempLoopTask.addLineToFile(messagesList.get(0).getBody());
-    				// if finished, delete this message, finish the task
-    				if(tempLoopTask.getRemainingCounter() == 0){
-    					//workerToManager.deleteMessage(messagesList.get(0));
-    					tempLoopTask.finishTask(s3);
-    					// remove task from tasks list
-    					tasks.remove(tempLoopTask);
-    					System.out.println("Manager: tasks size: " + tasks.size());
-    				}
-    				break;
-    			}
+    		int taskFileStatus = addLineToFile(messagesList.get(0).getBody(), "./" + msgTaskId + "OutputFile.txt");
+    		workerToManager.deleteMessage(messagesList.get(0));
+    		// if -1- error
+    		if(taskFileStatus == -1)
+    		{
+    			break;
     		}
+    		// if 0 - task finished
+    		else if(taskFileStatus == 0)
+    		{
+    			String outputFileS3key = s3.uploadFile("./" + msgTaskId + "OutputFile.txt");
+    			File tempFile = new File("./" + msgTaskId + "OutputFile.txt");
+    			tempFile.delete();
+    			System.out.println("Task " + msgTaskId + ": output File Uploaded\n");
+    			managerToLocal.sendMessageWithId(outputFileS3key, msgTaskId);
+    			numberOfOpenTasks--;
+    		}
+    		// if 1 - line added, do nothing
 
-    	    workerToManager.deleteMessage(messagesList.get(0));
     	}
-    	threadIsAlive = false;
 		
 	}
 	
-	// create task for this local application request, init it and add to list
-	private int readFromLocalApps(){
-//    	// start workers
-//    	// requests from AWS- for now create one worker
-//    	Worker worker1 = new Worker(credentials, managerToWorker, workerToManager, 1);
-//    	worker1.analyzeTweet();
-//    	System.out.println("Manager: After Worker Finishes!");
-//
-//    	// check if thread of reading input from worker is running
-//    	if(!threadIsAlive)
-//    		readInputFromWorkers.run();
-//		// if there wasn't terminate request yet-
-		while(true)
-		{
-			// 1.1 read input message, send to local its queue (keep reading until receive request)
-			List<Message> inputMessageList;
-			do{
-				inputMessageList = localToManager.getMessages(1);
-				try {
-					Thread.sleep(500);
-				} catch (InterruptedException e) {
-					e.printStackTrace();
-				}
-			}while(inputMessageList.size() == 0);
-			Message	inputMessage = inputMessageList.get(0);
-			System.out.println("Manager: received: " + inputMessageList.get(0).getBody());
-			localToManager.deleteMessage(inputMessage);
-			// check if it is termination message
-			if(inputMessage.getMessageAttributes().get("terminate") != null)
-			{
-				// terminate
-				gTerminate = true;
+	private String getAndRemoveLastLine( File file ) {
+        RandomAccessFile fileHandler = null;
+        try {
+            fileHandler = new RandomAccessFile( file, "rw" );
+            long fileLength = fileHandler.length() - 1;
+            long filePointer;
+            StringBuilder sb = new StringBuilder();
+
+            for(filePointer = fileLength; filePointer != -1; filePointer--){
+                fileHandler.seek( filePointer );
+                int readByte = fileHandler.readByte();
+
+                if( readByte == 0xA ) {
+                    if( filePointer == fileLength ) {
+                        continue;
+                    }
+                    break;
+
+                } else if( readByte == 0xD ) {
+                    if( filePointer == fileLength - 1 ) {
+                        continue;
+                    }
+                    break;
+                }
+
+                sb.append( ( char ) readByte );
+            }
+
+            String lastLine = sb.reverse().toString();
+            fileHandler.setLength(filePointer+1);
+            return lastLine;
+        } catch( java.io.FileNotFoundException e ) {
+            e.printStackTrace();
+            return null;
+        } catch( java.io.IOException e ) {
+            e.printStackTrace();
+            return null;
+        } finally {
+            if (fileHandler != null )
+                try {
+                    fileHandler.close();
+                } catch (IOException e) {
+                    /* ignore */
+                }
+        }
+    }
+    
+    private int addLineToFile(String line, String path){
+    	File file = new File(path);
+    	//Get Counter From File
+    	String lastLine = getAndRemoveLastLine(file);
+    	int counter = Integer.valueOf(lastLine);
+    	System.out.println(counter);
+    	try {
+			FileWriter writer = new FileWriter(file, true);
+			PrintWriter out = new PrintWriter(writer);
+			//Write Last Line
+			out.append(line + "\n");
+			if (counter==0){
+				out.close();
 				return 0;
+			} else {
+				out.append(Integer.toString(counter-1));
+				out.close();
+				return 1;
 			}
 			
-			Task tempTask = addNewTask(inputMessage);
-			// no running workers 
-			if(gNumOfWorkers == 0)
-			{
-				System.out.println("Manager: Creating " + gCounter/tempTask.getN() + " workers.");
-				gNumOfWorkers = (int) (gCounter/tempTask.getN());
-				// run workers: gCounter/tempTask.getN() = numOfWorkersToRun
-			}
-			else if(tempTask.getCounter()/tempTask.getN() > gNumOfWorkers)
-			{
-				System.out.println("Manager: Creating " + (int)(gCounter/tempTask.getN() - gNumOfWorkers) + " workers.");
-				gNumOfWorkers = (int) (tempTask.getCounter()/tempTask.getN() - gNumOfWorkers);
-				// run workers: gCounter/tempTask.getN() - gNumOfWorkers
-			}
-	    	// start workers
-	    	// requests from AWS- for now create one worker
-	    	Worker worker11 = new Worker(credentials, managerToWorker, workerToManager, 1);
-	    	worker11.analyzeTweet();
-	    	System.out.println("Worker Finishes!");
-
-	    	// check if thread of reading input from worker is running
-	    	if(!threadIsAlive)
-	    		readInputFromWorkers.run();
-			
-		}
-
-	}
-	
-	private Task addNewTask(Message inputMessage)
-	{
-		// init task
-		Task tempTask = new Task(String.valueOf(tasks.size()), localToManager, managerToLocal);
-		// start this task
-		tempTask.startTask(s3, managerToWorker, inputMessage);
-		gCounter += tempTask.getCounter();
-
-		// add to tasks list
-		tasks.add(tempTask);
-		return tempTask;
-	}
-	
-	public void terminateManager(){
-		// close all workers and wait for them to finish properly 
-		
- 		// finish process
-    	managerToWorker.deleteQueue();
-    	workerToManager.deleteQueue();
-    	System.out.println("Manager: finished");
-	}
-
-
-	public void init() {
-		// 1.1 read input message, send to local its queue (keep reading until receive request)
-		// for local use- read first app and then send it its id
-		List<Message> inputMessageList;
-		do{
-			inputMessageList = localToManager.getMessages(1);
-			try {
-				Thread.sleep(500);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}while(inputMessageList.size() == 0);
-		Message	inputMessage = inputMessageList.get(0);
-		localToManager.deleteMessage(inputMessage);
-
-		
-		Task tempTask = addNewTask(inputMessage);
-		// no running workers 
-		if(gNumOfWorkers == 0)
-		{
-			System.out.println("Manager: Creating " + gCounter/tempTask.getN() + " workers.");
-			gNumOfWorkers = (int) (gCounter/tempTask.getN());
-			// run workers: gCounter/tempTask.getN() = numOfWorkersToRun
-		}
-		else if(tempTask.getCounter()/tempTask.getN() > gNumOfWorkers)
-		{
-			System.out.println("Manager: Creating " + (int)(gCounter/tempTask.getN() - gNumOfWorkers) + " workers.");
-			gNumOfWorkers = (int) (tempTask.getCounter()/tempTask.getN() - gNumOfWorkers);
-			// run workers: gCounter/tempTask.getN() - gNumOfWorkers
-		}
-	}
-	
+		} catch (IOException e) {
+			e.printStackTrace();
+			return -1;
+		} 
+    }
 }

@@ -3,13 +3,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-//import java.util.UUID;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 
 import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
@@ -30,29 +31,192 @@ import aws.S3;
 import aws.SQS;
 import remote.Manager;
 
-// local application- first assignment in DSPS course
  public class TweetAnaylizer{
+	// aws 
+	private AWSCredentials credentials;
+	private AmazonEC2 ec2;
+	private S3 s3;
+	private SQS localToManager;
+	private SQS managerToLocal;
+	// internal info
+	private String id;
+	// arguments from user
+	private boolean terminate;
+	private int n;
 
-	private static String bucketName = "dspsass1bucketasafohad";
-	private static String localToManagerQueueName = "localtomanagerasafohad";
-	private static String managerToLocalQueueName = "managerToLocalasafohad";
+	// main function
+    public static void main(String[] args) throws Exception {
+    	// 1. parse input arguments
+    	int argsNum = args.length;
+    	if(argsNum != 3 && argsNum != 4 )
+    	{
+    		System.out.println("LocalApp: Usage: inputFileName outputFileName n terminate(optional)");
+    		return;
+    	}
 
-	private static String propertiesFilePath = "./ohadInfo.properties";
-	private static AmazonEC2 ec2;
-	//private static String id;
+    	boolean terminate = false;
+		String inputFileName = args[0];
+		String outputFileName = args[1];
+		int n = Integer.parseInt(args[2]);
+		if(argsNum == 4 && args[3].equals("terminate"))
+			terminate = true;
+		// 2. hard coded names
+		String bucketName 				= "dspsass1bucketasafohad";
+		String localToManagerQueueName 	= "localtomanagerasafohad";
+		String managerToLocalQueueName 	= "managerToLocalasafohad";
+		String propertiesFilePath 		= "./ohadInfo.properties";
+		// 4. create instance of TweetAnaylizer
+		TweetAnaylizer myTweetAnaylizer = new TweetAnaylizer(propertiesFilePath, 
+															 bucketName,
+															 localToManagerQueueName,
+															 managerToLocalQueueName,
+															 terminate,
+															 n);
+		// 5. run the analyzing
+		myTweetAnaylizer.run(inputFileName, outputFileName);
+		// 6. terminate analyzing
+		myTweetAnaylizer.terminate();
+		System.out.println("LocalApp: Bye bye");
+	}
+    
+	private TweetAnaylizer(	String propertiesFilePath, 
+							String bucketName,
+							String localToManagerQueueName,
+							String managerToLocalQueueName,
+							boolean terminate,
+							int n) {
+		
+		try {
+			// 1. creating credentials and ec2 client
+			credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
+			System.out.println("LocalApp: Credentials created.");
+	 	 	ec2 = new AmazonEC2Client(credentials);
+	 		// 2. uploading the input file to S3
+	 		s3 = new S3(credentials, bucketName);
+	 		// 3. create queue (from local app to manager) and send message with the key of the file
+	 		localToManager = new SQS(credentials, localToManagerQueueName);
+	 		managerToLocal = new SQS(credentials, managerToLocalQueueName);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		this.terminate 	= terminate;
+		this.n			= n;
+		this.id			= UUID.randomUUID().toString();
+	}
+	
+	private void run(String inputFileName, String outputFileName) {
+		// 1. upload input file to s3
+ 		String inputFileS3key = s3.uploadFile(inputFileName);
+ 		System.out.println("LocalApp: File Uploaded\n");
+ 		// 2. send key to manager with attributes (numOfWorkers and my id)
+ 		localToManager.sendMessageWithNumOfWorkersAndId(inputFileS3key, String.valueOf(n), id);
+		// 3. find if there is manager instance
+		if (!checkIfManagerExist())
+		{
+			//will be added when we know how to bootstrap
+			try {
+				launchManager();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		
+ 		// for now - create manager
+// 		Runnable manager1;
+//		try {
+//			manager1 = new Manager(credentials, localToManager, managerToLocal, s3, ec2);
+//			new Thread(manager1).start();
+//		} catch (FileNotFoundException e1) {
+//			e1.printStackTrace();
+//		} catch (IOException e1) {
+//			e1.printStackTrace();
+//		}
 
-    public static boolean checkIfManagerExist() {
+ 		// 4. read message- analyzed data
+ 		// read until receive answer from manager
+ 		List<Message> messageFromManagerList;
+ 		do{
+ 			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
+ 			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+ 			if(!messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
+ 				messageFromManagerList = null;
+ 		}while(messageFromManagerList.size() == 0 );
+ 		Message messageFromManager = messageFromManagerList.get(0);
+ 		managerToLocal.deleteMessage(messageFromManagerList.get(0));
+        System.out.println("LocalApp: Message from Manager with my id: " + messageFromManager.getBody());
+ 		
+        // 7. download the output file, write it to HTML and delete it        
+        S3Object outputFile = s3.downloadFile(messageFromManager.getBody());
+        s3.deleteFile(messageFromManager.getBody());
+
+        // 8. create HTML file
+        BufferedReader reader = new BufferedReader(new InputStreamReader(outputFile.getObjectContent()));
+        ArrayList<String> allOutputLines = new ArrayList<String>(); 
+    	while (true) {          
+    	    String line;
+			try {
+				line = reader.readLine();
+				if (line == null)
+				{
+					reader.close();
+					break;
+				}        
+	    	    allOutputLines.add(line);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}           
+    	}
+    	createHTMLFile(allOutputLines, outputFileName+".html");
     	
+	}
+	
+	private void terminate() {
+    	// send termination message to manager
+    	if(terminate)
+    	{
+    		localToManager.sendMessageWithIdAndTerminate("I am terminating you!", id);
+    	}
+    	// 4. read ack terminate message
+    	 		
+ 		List<Message> messageFromManagerList;
+ 		do{
+ 			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
+ 			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+ 			if(!messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
+ 				messageFromManagerList = null;
+ 		}while(messageFromManagerList.size() == 0 );
+ 		Message messageFromManager = messageFromManagerList.get(0);
+ 		System.out.println("Manager ack message for termination: " + messageFromManager.getBody());
+
+ 		// TODO: handle all deletes
+        s3.deletebucket();
+        // need to delete s3!!!
+        localToManager.deleteQueue();
+        managerToLocal.deleteQueue();
+        // need to delete clients!!
+	}
+	
+	// check if manager exist (to know if need to launch manager instance)
+    private boolean checkIfManagerExist() {
+    	// basically was taken from stack overflow
         Iterator<Reservation> vReservations = ec2.describeInstances()
                 .getReservations().iterator();
         Instance managerInstance = null;
-        //Step through all the reservations...
+        // Step through all the reservations...
         Reservation vResItem = null;
         while (vReservations.hasNext()) {
-            //For each reservation, get the instances
+            // For each reservation, get the instances
             vResItem = vReservations.next();
             Iterator<Instance> vInstances = vResItem.getInstances().iterator();
-            //For each instance, get the tags associated with it.
+            // For each instance, get the tags associated with it.
             while (vInstances.hasNext()) {
                 Instance vInstanceItem = vInstances.next();
                 List<Tag> pTags = vInstanceItem.getTags();
@@ -78,7 +242,8 @@ import remote.Manager;
         }
     }
 
-    public static void launchManager(AWSCredentials credentials) throws Exception {    
+    // launch manager instance
+    private void launchManager() throws Exception {    
         try {
             // Basic 64-bit Amazon Linux AMI (AMI Id: ami-08111162)
         	// create request for manager
@@ -103,137 +268,13 @@ import remote.Manager;
             System.out.println("Error Code: " + ase.getErrorCode());
             System.out.println("Request ID: " + ase.getRequestId());
         }
-
     }
 	 
-    public static void main(String[] args) throws Exception {
-    	// 0. parse input arguments
-    	int argsNum = args.length;
-    	if(argsNum != 3 && argsNum != 4 )
-    	{
-    		System.out.println("LocalApp: Usage: inputFileName outputFileName n terminate(optional)");
-    		return;
-    	}
-
-    	boolean terminate = false;
-		String inputFileName = args[0];
-		String outputFileName = args[1];
-		int numOfWorkers = Integer.parseInt(args[2]);
-		if(argsNum == 4)
-			terminate = true;
-		
-		// 1. creating credentials and ec2 client
-		AWSCredentials credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
- 		System.out.println("LocalApp: Credentials created.");
- 	 	ec2 = new AmazonEC2Client(credentials);
- 		
- 		// 2. uploading the input file to S3
- 		S3 s3 = new S3(credentials, bucketName);
- 		String inputFileS3key = s3.uploadFile(inputFileName);
- 		System.out.println("LocalApp: File Uploaded\n");
- 		
- 		// 3. create queue (from local app to manager) and send message with the key of the file
- 		SQS localToManager = new SQS(credentials, localToManagerQueueName);
- 		SQS managerToLocal = new SQS(credentials, managerToLocalQueueName);
- 		
- 		// 4. send with attributes (terminate and numOfWorkers)
- 		localToManager.sendMessageWithNumOfWorkers(inputFileS3key, String.valueOf(numOfWorkers));
- 		
-		// 5. find if there is manager instance
-		if (!checkIfManagerExist())
-		{
-			//will be added when we know how to bootstrap
-			launchManager(credentials);
-		}
-		
- 		// for now - create manager
- 		Runnable manager1 = new Manager(credentials, localToManager, managerToLocal, s3);
- 		new Thread(manager1).start();
- 		//manager1.run();
- 		
- 		// 5. read your id
- 		try {
-			Thread.sleep(1000);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
- 		System.out.println("LocalApp: after first sleep");
- 		List<Message> inputMessageList;
-		do{
-			inputMessageList = managerToLocal.getMessages(1);
-			try {
-				Thread.sleep(500);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}while(inputMessageList.size() == 0);
-		Message	idMessages = inputMessageList.get(0);
- 		String body = idMessages.getBody();
- 		String id = idMessages.getMessageAttributes().get("id").getStringValue();
- 		System.out.println("LocalApp: Body: " + body + "id: " + id);
- 		managerToLocal.deleteMessage(idMessages);
-
-
- 		
- 		// 6. read message
- 		// read until receive answer from manager
- 		List<Message> messageFromManagerList;
- 		do{
- 			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
- 			try {
-				Thread.sleep(500);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
- 			//if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
- 		}while(messageFromManagerList.size() == 0 );
- 		Message messageFromManager = messageFromManagerList.get(0);
- 		managerToLocal.deleteMessage(messageFromManagerList.get(0));
-        System.out.println("LocalApp: Message from Manager with my id: " + messageFromManager.getBody());
- 		
-        // 7. download the output file, write it to HTML and delete it        
-        S3Object outputFile = s3.downloadFile(messageFromManager.getBody());
-
-        BufferedReader reader = new BufferedReader(new InputStreamReader(outputFile.getObjectContent()));
-
-        ArrayList<String> allOutputLines = new ArrayList<String>(); 
-
-    	while (true) {          
-    	     String line = reader.readLine();           
-    	     if (line == null)
-    	          break;            
-    	     allOutputLines.add(line);
-
-    	}
-    	reader.close();
-    	createHTMLFile(allOutputLines, outputFileName+".html");
-    	
-    	// send termination message to manager
-    	if(terminate)
-    	{
-    		localToManager.sendMessageWithIdAndTerminate("I am terminating you!", id);
-    	}
- 		try {
-			Thread.sleep(2000);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
-        s3.deleteFile(messageFromManager.getBody());
-        s3.deletebucket();
-        // need to delete s3!!!
-        localToManager.deleteQueue();
-        managerToLocal.deleteQueue();
-        // need to delete clients!!
- 		
-		System.out.println("LocalApp: Bye bye");
-	}
-    
- 
-
-	private static void createHTMLFile(ArrayList<String> allLines,
-			String outputFilePath) {
-		
+    // create HTML file from the analyzed tweets file
+	private void createHTMLFile(ArrayList<String> allLines,String outputFilePath) {
+		// create output string with header
 		String output = "<HTML>\n<HEAD>\n</HEAD>\n<BODY>\n";
+		// isolate all data, add with the right color and add entities
 		for (String line : allLines) {
 			//System.out.println("Line: " + line);
 			String sentiment  	= line.substring(0, line.indexOf(';'));
@@ -243,8 +284,9 @@ import remote.Manager;
 			String rawTweet		= tweet.substring(tweet.indexOf('"')+1,tweet.lastIndexOf('"'));
             output += "<p> <b><font color=\"" + sentiment + "\"> " + rawTweet + "</font></b> " + entities + "</p>\n";
 		}
+		// close the HTML string
 		output += "</BODY>\n</HTML>";
-		
+		// create the file
 		if ( null == outputFilePath ) {
 			System.out.println(output);
 		} else {
@@ -261,4 +303,5 @@ import remote.Manager;
 		}
 		
 	}
+    
  }
