@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.RandomAccessFile;
+import java.io.Writer;
 import java.util.List;
 
 import com.amazonaws.auth.AWSCredentials;
@@ -85,7 +86,6 @@ public class Manager implements Runnable{
 		workerToManager = new SQS(credentials, workerToManagerSQSQueueName);
 		s3 				= new S3(credentials, s3BucketName);
 		ec2				= new EC2(credentials);
-		//ec2				= new EC2();
 		// 4. init internal info
 		numberOfOpenTasks = 0;
 		gNumOfWorkers 	= 0;
@@ -139,7 +139,7 @@ public class Manager implements Runnable{
 				// TODO: return message to local app
 				// terminate
 				gTerminate = true;
-				return 0;
+				continue;
 			}
 			// 3. if not terminate- request for new task
 			int tempN = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
@@ -165,25 +165,34 @@ public class Manager implements Runnable{
 //	    	System.out.println("Worker Finishes!");
 			
 		}
+		// close all workers...
 		return 0;
 
 	}
 	
 	// add task to the manager
-	private Long parseNewTask(Message inputMessage, String taskId)
+	private long parseNewTask(Message inputMessage, String taskId)
 	{
 		// download file
 		S3Object inputFile = s3.downloadFile(inputMessage.getBody());
 		s3.deleteFile(inputMessage.getBody());
 		// create file with the id name, 
-		File tempFile = new File("./" + taskId + "OutputFile.txt");
+		File tempFile = new File("./" + taskId + "OutputFile.txt"); 
+		long numOfLines = 0;
 		try {
+			// create new output file
 			tempFile.createNewFile();
-		} catch (IOException e2) {
-			e2.printStackTrace();
+			// read how many lines in the original file
+			numOfLines = countLines(inputFile);
+			Writer writer = new FileWriter(tempFile);
+			// write counter
+			writer.write(String.valueOf(numOfLines));
+			// close writer
+			writer.close();
+		} catch (IOException e4) {
+			e4.printStackTrace();
 		}
-		// read how many lines, 
-		long numOfLines = 0;// = countLines(inputFile.getObjectContent());
+
 		// add all lines to workers queue
 		BufferedReader reader = new BufferedReader(new InputStreamReader(inputFile.getObjectContent()));
     	while (true) {          
@@ -198,7 +207,6 @@ public class Manager implements Runnable{
     			break;
     		// send with id attribute
     		managerToWorker.sendMessageWithId(line, taskId);
-    		numOfLines++;
     	}
     	try {
 			reader.close();
@@ -221,9 +229,9 @@ public class Manager implements Runnable{
     	System.out.println("Manager: finished");
 	}
     
-    public long countLines(String filename) throws IOException {
+    public long countLines(S3Object inputFile) throws IOException {
     	// was taken from stack overflow
-        InputStream is = new BufferedInputStream(new FileInputStream(filename));
+        InputStream is = new BufferedInputStream(inputFile.getObjectContent());
         try {
             byte[] c = new byte[1024];
             long count = 0;
