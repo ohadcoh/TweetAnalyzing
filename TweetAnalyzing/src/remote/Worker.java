@@ -11,6 +11,7 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.Vector;
 
+import org.joda.time.LocalDateTime;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 
@@ -33,7 +34,7 @@ import edu.stanford.nlp.sentiment.SentimentCoreAnnotations;
 import edu.stanford.nlp.trees.Tree;
 import edu.stanford.nlp.util.CoreMap;
 
-public class Worker {
+public class Worker implements Runnable {
 	// fields related to tweet analyzing
 	private StanfordCoreNLP sentimentPipeline;
 	private StanfordCoreNLP NERPipeline;
@@ -52,7 +53,7 @@ public class Worker {
 	{
 		// hard coded names
 		String propertiesFilePath 		= "./ohadInfo.properties";
-		String inputSQSQueueName		= "managertoworkerasafohad";
+		String inputSQSQueueName		= "managerToWorkerasafohad";
 		String outputSQSQueueName		= "workerToManagerasafohad";
 		String statisticsBucketName 	= "workersstatisticsasafohad";
 		// create new worker
@@ -61,9 +62,9 @@ public class Worker {
 	}
 	
 	protected Worker(	String propertiesFilePath, 
-					String statisticsBucketName, 
 					String inputSQSQueueName,
-					String outputSQSQueueName) {
+					String outputSQSQueueName,
+					String statisticsBucketName) {
 		// 0. create id
 		id = UUID.randomUUID().toString();
 		// 1. creating credentials
@@ -94,6 +95,10 @@ public class Worker {
 		numOfLinksOk		= 0;
 	}
 	
+	public void run() {
+		analyzeTweet();		
+	}
+	
 	public void analyzeTweet() {
 		while(true){
 			// 1. read message from SQS
@@ -110,7 +115,11 @@ public class Worker {
 			}
 			// 2. check if terminated request
 			if(inputMessageList.get(0).getMessageAttributes().get("terminate") != null)
+			{
+				System.out.println("Worker received termination request");
 				break;
+			}
+				
 			// 3. isolate id and link
 			numOfLinksHandled++;
 			Message inputMessage = inputMessageList.get(0);
@@ -131,6 +140,7 @@ public class Worker {
 				e.printStackTrace();
 			}
 			// 5. analyze the tweet
+			System.out.println("Worker: tweet is- " + tweet);
 			Vector<String> entities = findEntities(tweet);
 			String sentimentColor = findSentiment(tweet);
 			// 6. write message to output SQS
@@ -142,7 +152,7 @@ public class Worker {
 		try {
 			File statistics = new File("statisticsOfWorker" + id + ".txt");
 			Writer writer = new OutputStreamWriter(new FileOutputStream(statistics));
-			writer.write("Worker " + id + " handled: " + numOfLinksHandled + 
+			writer.write(LocalDateTime.now() + "### Worker " + id + " handled: " + numOfLinksHandled + 
 					". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.");
 			writer.close();
 			s3.uploadFile("statisticsOfWorker" + id + ".txt");
@@ -217,5 +227,6 @@ public class Worker {
 			return "Black";
 		}
 	}
+
 
 }

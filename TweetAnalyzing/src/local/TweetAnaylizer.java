@@ -19,6 +19,7 @@ import com.amazonaws.services.sqs.model.Message;
 import aws.EC2;
 import aws.S3;
 import aws.SQS;
+import remote.Manager;
 
  public class TweetAnaylizer{
 	// aws 
@@ -47,11 +48,11 @@ import aws.SQS;
 		String inputFileName = args[0];
 		String outputFileName = args[1];
 		int n = Integer.parseInt(args[2]);
-		if(argsNum == 4 && args[3].equals("terminate"))
+		//if(argsNum == 4 && args[3].equals("terminate"))
 			terminate = true;
 		// 2. hard coded names
 		String bucketName 				= "dspsass1bucketasafohad";
-		String localToManagerQueueName 	= "localtomanagerasafohad";
+		String localToManagerQueueName 	= "localToManagerasafohad";
 		String managerToLocalQueueName 	= "managerToLocalasafohad";
 		String propertiesFilePath 		= "./ohadInfo.properties";
 		// 4. create instance of TweetAnaylizer
@@ -104,34 +105,42 @@ import aws.SQS;
 		{
 			//will be added when we know how to bootstrap
 			try {
-				ec2.startManagerInstance();
+				//ec2.startManagerInstance();
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
 		// for now - create manager
-// 		Runnable manager1;
-//		try {
-//			manager1 = new Manager(credentials, localToManager, managerToLocal, s3, ec2);
-//			new Thread(manager1).start();
-//		} catch (FileNotFoundException e1) {
-//			e1.printStackTrace();
-//		} catch (IOException e1) {
-//			e1.printStackTrace();
-//		}
+		// hard coded names
+		String propertiesFilePath 				= "./ohadInfo.properties";
+		String localToManagerSQSQueueName		= "localToManagerasafohad";
+		String managerToLocalSQSQueueName		= "managerToLocalasafohad";
+		String s3BucketName						= "dspsass1bucketasafohad";
+		String managerToWorkerSQSQueueName		= "managerToWorkerasafohad";
+		String workerToManagerSQSQueueName		= "workerToManagerasafohad";
+		// create manager instance
+		Manager myManager = new Manager(propertiesFilePath,
+										localToManagerSQSQueueName,
+										managerToLocalSQSQueueName,
+										s3BucketName,
+										managerToWorkerSQSQueueName,
+										workerToManagerSQSQueueName);
+		new Thread(myManager).start();
+		
 
  		// 4. read message- analyzed data
  		// read until receive answer from manager
  		List<Message> messageFromManagerList;
  		do{
  			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
+ 			if( messageFromManagerList.size() == 1)
+ 				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
+ 					break;
  			try {
 				Thread.sleep(500);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
- 			if(!messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
- 				messageFromManagerList = null;
  		}while(messageFromManagerList.size() == 0 );
  		Message messageFromManager = messageFromManagerList.get(0);
  		managerToLocal.deleteMessage(messageFromManagerList.get(0));
@@ -172,13 +181,14 @@ import aws.SQS;
  		List<Message> messageFromManagerList;
  		do{
  			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
+ 			if(messageFromManagerList.size() == 1)
+ 				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
+ 					break;
  			try {
 				Thread.sleep(500);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
- 			if(!messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
- 				messageFromManagerList = null;
  		}while(messageFromManagerList.size() == 0 );
  		Message messageFromManager = messageFromManagerList.get(0);
  		System.out.println("Manager ack message for termination: " + messageFromManager.getBody());

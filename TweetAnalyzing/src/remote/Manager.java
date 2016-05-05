@@ -45,10 +45,10 @@ public class Manager implements Runnable{
 	{
 		// hard coded names
 		String propertiesFilePath 				= "./ohadInfo.properties";
-		String localToManagerSQSQueueName		= "localtomanagerasafohad";
+		String localToManagerSQSQueueName		= "localToManagerasafohad";
 		String managerToLocalSQSQueueName		= "managerToLocalasafohad";
 		String s3BucketName						= "dspsass1bucketasafohad";
-		String managerToWorkerSQSQueueName		= "managertoworkerasafohad";
+		String managerToWorkerSQSQueueName		= "managerToWorkerasafohad";
 		String workerToManagerSQSQueueName		= "workerToManagerasafohad";
 		// create manager instance
 		Manager myManager = new Manager(propertiesFilePath,
@@ -60,7 +60,7 @@ public class Manager implements Runnable{
 		// run manager
 		myManager.run();
 		// terminate manager
-		myManager.terminate();
+		
 	}
 	
 	// constructor
@@ -111,9 +111,10 @@ public class Manager implements Runnable{
 		try {
 			workersThread.join();
 		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
+		
+		terminate();
 		return;
 	}
 
@@ -137,7 +138,7 @@ public class Manager implements Runnable{
 			// 2. check if it is termination message
 			if(inputMessage.getMessageAttributes().get("terminate") != null)
 			{
-				// terminate
+				System.out.println("Manager received termination request");
 				gTerminate = true;
 				idOfTerminateRequester = inputMessage.getMessageAttributes().get("id").getStringValue();
 				continue;
@@ -151,19 +152,18 @@ public class Manager implements Runnable{
 			if(neededWorkers > 0)
 			{
 				System.out.println("Manager: Creating " + neededWorkers + " workers.");
-				ec2.startWorkerInstances(neededWorkers);
+				//ec2.startWorkerInstances(neededWorkers);
 				gNumOfWorkers += neededWorkers;
 			}
 
 //	    	// start workers
-//	    	// requests from AWS- for now create one worker
-//			String propertiesFilePath 		= "./ohadInfo.properties";
-//			String inputSQSQueueName		= "managertoworkerasafohad";
-//			String outputSQSQueueName		= "workerToManagerasafohad";
-//			String statisticsBucketName 	= "workersstatisticsasafohad";
-//	    	Worker worker11 = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
-//	    	worker11.analyzeTweet();
-//	    	System.out.println("Worker Finishes!");
+	    	// requests from AWS- for now create one worker
+			String propertiesFilePath 		= "./ohadInfo.properties";
+			String inputSQSQueueName		= "managerToWorkerasafohad";
+			String outputSQSQueueName		= "workerToManagerasafohad";
+			String statisticsBucketName 	= "workersstatisticsasafohad";
+	    	Worker worker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
+	    	new Thread(worker).start();
 			
 		}
 		// close all workers...
@@ -184,10 +184,10 @@ public class Manager implements Runnable{
 			// create new output file
 			tempFile.createNewFile();
 			// read how many lines in the original file
-			numOfLines = countLines(inputFile);
+			numOfLines = 5;//= countLines(inputFile);
 			Writer writer = new FileWriter(tempFile);
 			// write counter
-			writer.write(String.valueOf(numOfLines));
+			writer.write(String.valueOf(numOfLines) + "\n");
 			// close writer
 			writer.close();
 		} catch (IOException e4) {
@@ -300,7 +300,19 @@ public class Manager implements Runnable{
     		// if 1 - line added, do nothing
 
     	}
-		
+    	managerToWorker.sendMessageWithIdAndTerminate("Worker- stop!", "0");
+    	List<Message> messageFromManagerList;
+ 		do{
+ 			messageFromManagerList = workerToManager.getMessagesMinimalVisibilityTime(1);
+ 			if( messageFromManagerList.size() == 1)
+ 					break;
+ 			try {
+				Thread.sleep(500);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+ 		}while(messageFromManagerList.size() == 0 );
+ 		System.out.println("Manager: Worker finished!: " + messageFromManagerList.get(0).getBody());
 	}
 	
 	private String getAndRemoveLastLine( File file ) {
@@ -355,17 +367,18 @@ public class Manager implements Runnable{
     	//Get Counter From File
     	String lastLine = getAndRemoveLastLine(file);
     	int counter = Integer.valueOf(lastLine);
-    	System.out.println(counter);
+    	//System.out.println(counter);
+    	counter--;
     	try {
 			FileWriter writer = new FileWriter(file, true);
 			PrintWriter out = new PrintWriter(writer);
 			//Write Last Line
 			out.append(line + "\n");
-			if (counter==0){
+			if (counter == 0){
 				out.close();
 				return 0;
 			} else {
-				out.append(Integer.toString(counter-1));
+				out.append(Integer.toString(counter));
 				out.close();
 				return 1;
 			}
