@@ -8,33 +8,22 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
 
-import com.amazonaws.AmazonServiceException;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.PropertiesCredentials;
-import com.amazonaws.services.ec2.AmazonEC2;
-import com.amazonaws.services.ec2.AmazonEC2Client;
-import com.amazonaws.services.ec2.model.CreateTagsRequest;
-import com.amazonaws.services.ec2.model.Instance;
-import com.amazonaws.services.ec2.model.InstanceType;
-import com.amazonaws.services.ec2.model.Reservation;
-import com.amazonaws.services.ec2.model.RunInstancesRequest;
-import com.amazonaws.services.ec2.model.Tag;
-import com.amazonaws.services.ec2.model.TerminateInstancesRequest;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.sqs.model.Message;
 
+import aws.EC2;
 import aws.S3;
 import aws.SQS;
-import remote.Manager;
 
  public class TweetAnaylizer{
 	// aws 
 	private AWSCredentials credentials;
-	private AmazonEC2 ec2;
+	private EC2 ec2;
 	private S3 s3;
 	private SQS localToManager;
 	private SQS managerToLocal;
@@ -90,7 +79,7 @@ import remote.Manager;
 			// 1. creating credentials and ec2 client
 			credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
 			System.out.println("LocalApp: Credentials created.");
-	 	 	ec2 = new AmazonEC2Client(credentials);
+	 	 	ec2 = new EC2(credentials);
 	 		// 2. uploading the input file to S3
 	 		s3 = new S3(credentials, bucketName);
 	 		// 3. create queue (from local app to manager) and send message with the key of the file
@@ -111,17 +100,16 @@ import remote.Manager;
  		// 2. send key to manager with attributes (numOfWorkers and my id)
  		localToManager.sendMessageWithNumOfWorkersAndId(inputFileS3key, String.valueOf(n), id);
 		// 3. find if there is manager instance
-		if (!checkIfManagerExist())
+		if (!ec2.checkIfManagerExist())
 		{
 			//will be added when we know how to bootstrap
 			try {
-				launchManager();
+				ec2.startManagerInstance();
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
 		}
-		
- 		// for now - create manager
+		// for now - create manager
 // 		Runnable manager1;
 //		try {
 //			manager1 = new Manager(credentials, localToManager, managerToLocal, s3, ec2);
@@ -171,7 +159,6 @@ import remote.Manager;
 			}           
     	}
     	createHTMLFile(allOutputLines, outputFileName+".html");
-    	
 	}
 	
 	private void terminate() {
@@ -203,72 +190,6 @@ import remote.Manager;
         managerToLocal.deleteQueue();
         // need to delete clients!!
 	}
-	
-	// check if manager exist (to know if need to launch manager instance)
-    private boolean checkIfManagerExist() {
-    	// basically was taken from stack overflow
-        Iterator<Reservation> vReservations = ec2.describeInstances()
-                .getReservations().iterator();
-        Instance managerInstance = null;
-        // Step through all the reservations...
-        Reservation vResItem = null;
-        while (vReservations.hasNext()) {
-            // For each reservation, get the instances
-            vResItem = vReservations.next();
-            Iterator<Instance> vInstances = vResItem.getInstances().iterator();
-            // For each instance, get the tags associated with it.
-            while (vInstances.hasNext()) {
-                Instance vInstanceItem = vInstances.next();
-                List<Tag> pTags = vInstanceItem.getTags();
-                Iterator<Tag> vIt = pTags.iterator();
-                while (vIt.hasNext()) {
-                    Tag item = vIt.next();
-                    //if the tag key macthes and the value we're looking for, we return
-                    if (item.getKey().equals("Name") && item.getValue().equals("Manager")) {
-                    	managerInstance= vInstanceItem;
-                    }
-                }
-            }
-        }
-        if(managerInstance != null)
-        {
-        	System.out.println("Manager extist: " + managerInstance.getInstanceId());
-        	return true;
-        }
-        else
-        {
-        	System.out.println("Manager not extist");
-        	return false;
-        }
-    }
-
-    // launch manager instance
-    private void launchManager() throws Exception {    
-        try {
-            // Basic 64-bit Amazon Linux AMI (AMI Id: ami-08111162)
-        	// create request for manager
-            RunInstancesRequest request = new RunInstancesRequest("ami-08111162", 1, 1);
-            request.setInstanceType(InstanceType.T2Micro.toString());
-            // run instance
-            List<Instance> instances = ec2.runInstances(request).getReservation().getInstances();
-            // add 'manager' tag
-            CreateTagsRequest createTagsRequest = new CreateTagsRequest().
-            		withResources(instances.get(0).getInstanceId()).withTags(new Tag("Name", "Manager"));
-            ec2.createTags(createTagsRequest);
-            System.out.println("LocalApp: Launch instances: " + instances.get(0).getInstanceId());
-            // temporary terminate
-            TerminateInstancesRequest termintateManagerRequest = 
-            		new TerminateInstancesRequest().withInstanceIds(instances.get(0).getInstanceId());
-            ec2.terminateInstances(termintateManagerRequest);
-            System.out.println("LocalApp: Terminate instances: " + instances.get(0).getInstanceId());
- 
-        } catch (AmazonServiceException ase) {
-            System.out.println("Caught Exception: " + ase.getMessage());
-            System.out.println("Reponse Status Code: " + ase.getStatusCode());
-            System.out.println("Error Code: " + ase.getErrorCode());
-            System.out.println("Request ID: " + ase.getRequestId());
-        }
-    }
 	 
     // create HTML file from the analyzed tweets file
 	private void createHTMLFile(ArrayList<String> allLines,String outputFilePath) {

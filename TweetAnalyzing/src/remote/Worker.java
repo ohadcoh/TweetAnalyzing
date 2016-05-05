@@ -48,17 +48,17 @@ public class Worker {
 	private long numOfLinksBroken;
 	private long numOfLinksOk;
 	
-//	public static void main(String[] args)
-//	{
-//		// hard coded names
-//		String propertiesFilePath 		= "./ohadInfo.properties";
-//		String inputSQSQueueName		= "managertoworkerasafohad";
-//		String outputSQSQueueName		= "workerToManagerasafohad";
-//		String statisticsBucketName 	= "workersstatisticsasafohad";
-//		// create new worker
-//		Worker myWorker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
-//		myWorker.analyzeTweet();
-//	}
+	public static void main(String[] args)
+	{
+		// hard coded names
+		String propertiesFilePath 		= "./ohadInfo.properties";
+		String inputSQSQueueName		= "managertoworkerasafohad";
+		String outputSQSQueueName		= "workerToManagerasafohad";
+		String statisticsBucketName 	= "workersstatisticsasafohad";
+		// create new worker
+		Worker myWorker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
+		myWorker.analyzeTweet();
+	}
 	
 	protected Worker(	String propertiesFilePath, 
 					String statisticsBucketName, 

@@ -37,6 +37,7 @@ public class Manager implements Runnable{
 	private int numberOfOpenTasks;
 	// control booleans
 	private boolean gTerminate;
+	private String idOfTerminateRequester;
 	// variable for threads
 	private Runnable readInputFromWorkers;
 	
@@ -92,7 +93,7 @@ public class Manager implements Runnable{
 		gTerminate		= false; // on init no terminate
 		readInputFromWorkers = new Runnable() { // init thread for reading input from worker
             public void run() {
-                Manager.this.readInputFromWorkers();
+                Manager.this.readFromWorkers();
             }
         };
 	}
@@ -136,9 +137,9 @@ public class Manager implements Runnable{
 			// 2. check if it is termination message
 			if(inputMessage.getMessageAttributes().get("terminate") != null)
 			{
-				// TODO: return message to local app
 				// terminate
 				gTerminate = true;
+				idOfTerminateRequester = inputMessage.getMessageAttributes().get("id").getStringValue();
 				continue;
 			}
 			// 3. if not terminate- request for new task
@@ -211,7 +212,6 @@ public class Manager implements Runnable{
     	try {
 			reader.close();
 		} catch (IOException e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 			return (long) -1;
 		}
@@ -226,6 +226,8 @@ public class Manager implements Runnable{
  		// finish process
     	managerToWorker.deleteQueue();
     	workerToManager.deleteQueue();
+    	// send message to local
+    	managerToLocal.sendMessageWithId("I am finished", idOfTerminateRequester);
     	System.out.println("Manager: finished");
 	}
     
@@ -252,7 +254,7 @@ public class Manager implements Runnable{
     }
     
 	// read workers queue and parse the messages
-	private void readInputFromWorkers() {
+	private void readFromWorkers() {
 		// run until terminate request arrived ***AND*** all tasks were handled and finished
     	while ((numberOfOpenTasks != 0) || (gTerminate == false)) {
     		// read one message
