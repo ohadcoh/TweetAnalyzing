@@ -156,14 +156,15 @@ public class Manager implements Runnable{
 
 //	    	// start workers
 	    	// requests from AWS- for now create one worker
-			String propertiesFilePath 		= "./ohadInfo.properties";
-			String inputSQSQueueName		= "managerToWorkerasafohad";
-			String outputSQSQueueName		= "workerToManagerasafohad";
-			String statisticsBucketName 	= "workersstatisticsasafohad";
-			for(int i=0; i < neededWorkers; i++){
-				Worker worker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
-		    	new Thread(worker).start();
-			}
+//			String propertiesFilePath 		= "./ohadInfo.properties";
+//			String inputSQSQueueName		= "managerToWorkerasafohad";
+//			String outputSQSQueueName		= "workerToManagerasafohad";
+//			String statisticsBucketName 	= "workersstatisticsasafohad";
+//			for(int i=0; i < neededWorkers; i++){
+//				Worker worker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
+//		    	new Thread(worker).start();
+//			}
+			ec2.startWorkerInstances(neededWorkers);
 	    	
 			
 		}

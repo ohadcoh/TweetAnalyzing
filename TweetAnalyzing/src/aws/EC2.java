@@ -22,7 +22,7 @@ import com.amazonaws.services.ec2.model.Tag;
 public class EC2 {
 	private static final String keyPair = "ass1KeyPair";
 	private static final String securityGroup = "MainSecurityGroup";
-	private static final String jarsBucketName = "dsps1jarsbucket";
+	private static final String jarsBucketName = "dsps1jarsbucketasaf";
 	private AmazonEC2 ec2;
 	private AWSCredentials credentials;
 	
@@ -51,9 +51,9 @@ public class EC2 {
 	}
 	
 	public void startManagerInstance(){
-		RunInstancesRequest request = new RunInstancesRequest("ami-08111162", 1, 1);
+		RunInstancesRequest request = new RunInstancesRequest("ami-f5f41398", 1, 1);
 		request.withKeyName(keyPair);
-		request.withSecurityGroupIds("sg-73b9970b");
+		request.withSecurityGroups(securityGroup);
 		request.withInstanceType(InstanceType.T2Micro);
 		//This options terminates the instance on shutdown
 		request.withInstanceInitiatedShutdownBehavior(ShutdownBehavior.Terminate);
@@ -66,10 +66,11 @@ public class EC2 {
 	}
 	
 	public void startWorkerInstances(int numOfInstances){
-		RunInstancesRequest request = new RunInstancesRequest("ami-08111162", numOfInstances, numOfInstances);
+		RunInstancesRequest request = new RunInstancesRequest("ami-f5f41398", numOfInstances, numOfInstances);
 		request.withKeyName(keyPair);
 		request.withSecurityGroups(securityGroup);
 		request.withInstanceType(InstanceType.T2Micro);
+		request.withInstanceInitiatedShutdownBehavior(ShutdownBehavior.Terminate);
 		request.withUserData(getUserDataScript("worker"));
 		ec2.runInstances(request).getReservation().getInstances();
 	}
@@ -95,7 +96,8 @@ public class EC2 {
         if (instanceType == "manager")
         	lines.add("java -Xms256m -Xmx768m -jar manager.jar");
         else
-        	lines.add("java -jar worker.jar");
+        	lines.add("java -Xms256m -Xmx768m -jar worker.jar");
+        lines.add("shutdown -h now");
         String str = new String(Base64.encodeBase64(join(lines, "\n").getBytes()));
         return str;
 	}

@@ -101,15 +101,15 @@ import aws.SQS;
  		// 2. send key to manager with attributes (numOfWorkers and my id)
  		localToManager.sendMessageWithNumOfWorkersAndId(inputFileS3key, String.valueOf(n), id);
 		// 3. find if there is manager instance
-		if (!ec2.checkIfManagerExist())
-		{
-			//will be added when we know how to bootstrap
-			try {
-				//ec2.startManagerInstance();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
+//		if (!ec2.checkIfManagerExist())
+//		{
+//			//will be added when we know how to bootstrap
+//			try {
+//				//ec2.startManagerInstance();
+//			} catch (Exception e) {
+//				e.printStackTrace();
+//			}
+//		}
 		// for now - create manager
 		// hard coded names
 //		String propertiesFilePath 				= "./ohadInfo.properties";
@@ -119,11 +119,13 @@ import aws.SQS;
 //		String managerToWorkerSQSQueueName		= "managerToWorkerasafohad";
 //		String workerToManagerSQSQueueName		= "workerToManagerasafohad";
 		// create manager instance
-		if(!ec2.checkIfManagerExist())
-		{
+// 		System.out.println("before check");
+//		if(!ec2.checkIfManagerExist())
+//		{
 			System.out.println("LocalApp: manager does not exist");
 			ec2.startManagerInstance();
-		}
+//		}
+//		System.out.println("after check");
 //		Manager myManager = new Manager(propertiesFilePath,
 //										localToManagerSQSQueueName,
 //										managerToLocalSQSQueueName,
