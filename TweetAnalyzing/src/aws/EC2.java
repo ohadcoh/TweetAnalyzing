@@ -21,7 +21,7 @@ import com.amazonaws.services.ec2.model.Tag;
 
 public class EC2 {
 	private static final String keyPair = "ass1KeyPair";
-	private static final String securityGroup = "ass1SecurityGroup";
+	private static final String securityGroup = "MainSecurityGroup";
 	private static final String jarsBucketName = "dsps1jarsbucket";
 	private AmazonEC2 ec2;
 	private AWSCredentials credentials;
@@ -93,9 +93,9 @@ public class EC2 {
         lines.add("echo accessKey=$AWS_ACCESS_KEY_ID > asafsarid.properties");
         lines.add("echo secretKey=$AWS_SECRET_ACCESS_KEY >> asafsarid.properties");
         if (instanceType == "manager")
-        	lines.add("java -jar testS3.jar");
+        	lines.add("java -jar manager.jar");
         else
-        	lines.add("java -jar miau.jar");
+        	lines.add("java -jar worker.jar");
         String str = new String(Base64.encodeBase64(join(lines, "\n").getBytes()));
         return str;
 	}
