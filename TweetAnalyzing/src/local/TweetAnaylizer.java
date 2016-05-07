@@ -48,7 +48,7 @@ import aws.SQS;
 		String inputFileName = args[0];
 		String outputFileName = args[1];
 		int n = Integer.parseInt(args[2]);
-		//if(argsNum == 4 && args[3].equals("terminate"))
+		if(argsNum == 4 && args[3].equals("terminate"))
 			terminate = true;
 		// 2. hard coded names
 		String bucketName 				= "dspsass1bucketasafohad";
