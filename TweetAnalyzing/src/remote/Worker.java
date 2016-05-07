@@ -52,7 +52,7 @@ public class Worker implements Runnable {
 	public static void main(String[] args)
 	{
 		// hard coded names
-		String propertiesFilePath 		= "./ohadInfo.properties";
+		String propertiesFilePath 		= "./dspsass1.properties";
 		String inputSQSQueueName		= "managerToWorkerasafohad";
 		String outputSQSQueueName		= "workerToManagerasafohad";
 		String statisticsBucketName 	= "workersstatisticsasafohad";

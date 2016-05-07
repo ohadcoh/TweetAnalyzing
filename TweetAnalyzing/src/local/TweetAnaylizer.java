@@ -19,7 +19,7 @@ import com.amazonaws.services.sqs.model.Message;
 import aws.EC2;
 import aws.S3;
 import aws.SQS;
-import remote.Manager;
+//import remote.Manager;
 
  public class TweetAnaylizer{
 	// aws 
@@ -54,7 +54,7 @@ import remote.Manager;
 		String bucketName 				= "dspsass1bucketasafohad";
 		String localToManagerQueueName 	= "localToManagerasafohad";
 		String managerToLocalQueueName 	= "managerToLocalasafohad";
-		String propertiesFilePath 		= "./ohadInfo.properties";
+		String propertiesFilePath 		= "./dspsass1.properties";
 		// 4. create instance of TweetAnaylizer
 		TweetAnaylizer myTweetAnaylizer = new TweetAnaylizer(propertiesFilePath, 
 															 bucketName,
@@ -112,20 +112,25 @@ import remote.Manager;
 		}
 		// for now - create manager
 		// hard coded names
-		String propertiesFilePath 				= "./ohadInfo.properties";
-		String localToManagerSQSQueueName		= "localToManagerasafohad";
-		String managerToLocalSQSQueueName		= "managerToLocalasafohad";
-		String s3BucketName						= "dspsass1bucketasafohad";
-		String managerToWorkerSQSQueueName		= "managerToWorkerasafohad";
-		String workerToManagerSQSQueueName		= "workerToManagerasafohad";
+//		String propertiesFilePath 				= "./ohadInfo.properties";
+//		String localToManagerSQSQueueName		= "localToManagerasafohad";
+//		String managerToLocalSQSQueueName		= "managerToLocalasafohad";
+//		String s3BucketName						= "dspsass1bucketasafohad";
+//		String managerToWorkerSQSQueueName		= "managerToWorkerasafohad";
+//		String workerToManagerSQSQueueName		= "workerToManagerasafohad";
 		// create manager instance
-		Manager myManager = new Manager(propertiesFilePath,
-										localToManagerSQSQueueName,
-										managerToLocalSQSQueueName,
-										s3BucketName,
-										managerToWorkerSQSQueueName,
-										workerToManagerSQSQueueName);
-		new Thread(myManager).start();
+		if(!ec2.checkIfManagerExist())
+		{
+			System.out.println("LocalApp: manager does not exist");
+			ec2.startManagerInstance();
+		}
+//		Manager myManager = new Manager(propertiesFilePath,
+//										localToManagerSQSQueueName,
+//										managerToLocalSQSQueueName,
+//										s3BucketName,
+//										managerToWorkerSQSQueueName,
+//										workerToManagerSQSQueueName);
+//		new Thread(myManager).start();
 		
 
  		// 4. read message- analyzed data
@@ -175,23 +180,26 @@ import remote.Manager;
     	if(terminate)
     	{
     		localToManager.sendMessageWithIdAndTerminate("I am terminating you!", id);
+    		// 4. read ack terminate message
+	 		
+     		List<Message> messageFromManagerList;
+     		do{
+     			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
+     			if(messageFromManagerList.size() == 1)
+     				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
+     					break;
+     			try {
+    				Thread.sleep(500);
+    			} catch (InterruptedException e) {
+    				e.printStackTrace();
+    			}
+     		}while(messageFromManagerList.size() == 0 );
+     		Message messageFromManager = messageFromManagerList.get(0);
+     		System.out.println("Manager ack message for termination: " + messageFromManager.getBody());
+            localToManager.deleteQueue();
+            managerToLocal.deleteQueue();
     	}
-    	// 4. read ack terminate message
-    	 		
- 		List<Message> messageFromManagerList;
- 		do{
- 			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
- 			if(messageFromManagerList.size() == 1)
- 				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
- 					break;
- 			try {
-				Thread.sleep(500);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
- 		}while(messageFromManagerList.size() == 0 );
- 		Message messageFromManager = messageFromManagerList.get(0);
- 		System.out.println("Manager ack message for termination: " + messageFromManager.getBody());
+    	
 	}
 	 
     // create HTML file from the analyzed tweets file

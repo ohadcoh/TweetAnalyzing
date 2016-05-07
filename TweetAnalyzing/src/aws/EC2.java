@@ -53,7 +53,7 @@ public class EC2 {
 	public void startManagerInstance(){
 		RunInstancesRequest request = new RunInstancesRequest("ami-08111162", 1, 1);
 		request.withKeyName(keyPair);
-		request.withSecurityGroups(securityGroup);
+		request.withSecurityGroupIds("sg-73b9970b");
 		request.withInstanceType(InstanceType.T2Micro);
 		//This options terminates the instance on shutdown
 		request.withInstanceInitiatedShutdownBehavior(ShutdownBehavior.Terminate);
@@ -78,22 +78,22 @@ public class EC2 {
 		ArrayList<String> lines = new ArrayList<String>();
         lines.add("#! /bin/bash");
         lines.add("BIN_DIR=/tmp");
-        lines.add("mkdir -p $BIN_DIR/dependencies");
-        lines.add("cd $BIN_DIR/dependencies");
-        lines.add("wget http://sdk-for-java.amazonwebservices.com/latest/aws-java-sdk.zip");
-        lines.add("unzip aws-java-sdk.zip");
-        lines.add("mv aws-java-sdk-*/ aws-java-sdk");
+        //lines.add("mkdir -p $BIN_DIR/dependencies");
+        //lines.add("cd $BIN_DIR/dependencies");
+        //lines.add("wget http://sdk-for-java.amazonwebservices.com/latest/aws-java-sdk.zip");
+        //lines.add("unzip aws-java-sdk.zip");
+        //lines.add("mv aws-java-sdk-*/ aws-java-sdk");
         lines.add("cd $BIN_DIR");
         lines.add("mkdir -p $BIN_DIR/bin/jar");
         lines.add("AWS_ACCESS_KEY_ID=" + credentials.getAWSAccessKeyId());
         lines.add("AWS_SECRET_ACCESS_KEY=" + credentials.getAWSSecretKey());
         lines.add("AWS_DEFAULT_REGION=us-east-1");
         lines.add("export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION");
-        lines.add("aws s3 cp s3://" + jarsBucketName + "/" + instanceType + ".jar" + instanceType + ".jar");
-        lines.add("echo accessKey=$AWS_ACCESS_KEY_ID > asafsarid.properties");
-        lines.add("echo secretKey=$AWS_SECRET_ACCESS_KEY >> asafsarid.properties");
+        lines.add("aws s3 cp s3://" + jarsBucketName + "/" + instanceType + ".jar " + instanceType + ".jar");
+        lines.add("echo accessKey=$AWS_ACCESS_KEY_ID > dspsass1.properties");
+        lines.add("echo secretKey=$AWS_SECRET_ACCESS_KEY >> dspsass1.properties");
         if (instanceType == "manager")
-        	lines.add("java -jar manager.jar");
+        	lines.add("java -Xms256m -Xmx768m -jar manager.jar");
         else
         	lines.add("java -jar worker.jar");
         String str = new String(Base64.encodeBase64(join(lines, "\n").getBytes()));

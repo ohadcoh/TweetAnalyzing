@@ -1,14 +1,11 @@
 package remote;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.io.RandomAccessFile;
@@ -45,7 +42,7 @@ public class Manager implements Runnable{
 	public static void main(String[] args)
 	{
 		// hard coded names
-		String propertiesFilePath 				= "./ohadInfo.properties";
+		String propertiesFilePath 				= "./dspsass1.properties";
 		String localToManagerSQSQueueName		= "localToManagerasafohad";
 		String managerToLocalSQSQueueName		= "managerToLocalasafohad";
 		String s3BucketName						= "dspsass1bucketasafohad";
@@ -188,7 +185,7 @@ public class Manager implements Runnable{
 			// create new output file
 			tempFile.createNewFile();
 			// read how many lines in the original file
-			numOfLines = 5;//countLines(inputFile);
+			//numOfLines = countLines(copyOfInputFile);
 			Writer writer = new FileWriter(tempFile);
 			// write counter
 			writer.write(String.valueOf(numOfLines) + "\n");
@@ -211,6 +208,7 @@ public class Manager implements Runnable{
     		if (line == null || line.length() == 0)
     			break;
     		// send with id attribute
+    		numOfLines++;
     		managerToWorker.sendMessageWithId(line, taskId);
     	}
     	try {
@@ -219,6 +217,9 @@ public class Manager implements Runnable{
 			e1.printStackTrace();
 			return (long) -1;
 		}
+    	// update line counter
+    	updateLineCounter(numOfLines, "./" + taskId + "OutputFile.txt");
+    	// update the numOfLines
     	numberOfOpenTasks++;
 		return numOfLines;
 	}
@@ -269,8 +270,7 @@ public class Manager implements Runnable{
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
-        localToManager.deleteQueue();
-        managerToLocal.deleteQueue();
+
 	}
     
     public long countLines(S3Object inputFile) throws IOException {
@@ -296,7 +296,7 @@ public class Manager implements Runnable{
 		BufferedReader reader = new BufferedReader(new InputStreamReader(inputFile.getObjectContent()));
     	long lines = 0;
     	while (reader.readLine() != null) lines++;
-    	//reader.close();
+    	reader.close();
     	return lines;
     }
     
@@ -396,6 +396,25 @@ public class Manager implements Runnable{
         }
     }
     
+	private int updateLineCounter(long counter, String path) {
+		File file = new File(path);
+    	//Get Counter From File
+    	String lastLine = getAndRemoveLastLine(file);
+    	long currCounter = Integer.valueOf(lastLine);
+    	long updatedCounter = counter + currCounter;
+    	try {
+			FileWriter writer = new FileWriter(file, true);
+			PrintWriter out = new PrintWriter(writer);
+			//Write Last Line
+			out.append(updatedCounter + "\n");
+			out.close();
+			return 0;			
+		} catch (IOException e) {
+			e.printStackTrace();
+			return -1;
+		} 
+	}
+	
     private int addLineToFile(String line, String path){
     	File file = new File(path);
     	//Get Counter From File
