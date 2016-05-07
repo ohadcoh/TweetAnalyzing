@@ -100,6 +100,7 @@ public class Worker implements Runnable {
 	}
 	
 	public void analyzeTweet() {
+		System.out.println("Worker: Start working!");
 		while(true){
 			// 1. read message from SQS
 			List<Message> inputMessageList = inputSQS.getMessages(1);
@@ -116,7 +117,8 @@ public class Worker implements Runnable {
 			// 2. check if terminated request
 			if(inputMessageList.get(0).getMessageAttributes().get("terminate") != null)
 			{
-				System.out.println("Worker received termination request");
+				System.out.println("Worker: received termination request");
+				inputSQS.deleteMessage(inputMessageList.get(0));
 				break;
 			}
 				
@@ -156,6 +158,7 @@ public class Worker implements Runnable {
 					". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.");
 			writer.close();
 			s3.uploadFile("statisticsOfWorker" + id + ".txt");
+			statistics.delete();
 		} catch (IOException e) {
 			e.printStackTrace();
 			outputSQS.sendMessageError("Statistics IO exception", id);

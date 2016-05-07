@@ -5,6 +5,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -162,8 +163,11 @@ public class Manager implements Runnable{
 			String inputSQSQueueName		= "managerToWorkerasafohad";
 			String outputSQSQueueName		= "workerToManagerasafohad";
 			String statisticsBucketName 	= "workersstatisticsasafohad";
-	    	Worker worker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
-	    	new Thread(worker).start();
+			for(int i=0; i < neededWorkers; i++){
+				Worker worker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
+		    	new Thread(worker).start();
+			}
+	    	
 			
 		}
 		// close all workers...
@@ -184,7 +188,7 @@ public class Manager implements Runnable{
 			// create new output file
 			tempFile.createNewFile();
 			// read how many lines in the original file
-			numOfLines = 5;//= countLines(inputFile);
+			numOfLines = 5;//countLines(inputFile);
 			Writer writer = new FileWriter(tempFile);
 			// write counter
 			writer.write(String.valueOf(numOfLines) + "\n");
@@ -221,36 +225,79 @@ public class Manager implements Runnable{
 	
 	// terminate manager
 	private void terminate(){
-		// close all workers and wait for them to finish properly 
-		
+		// close all workers and wait for them to finish properly
+		int waitsCounter;
+		while(gNumOfWorkers != 0)
+		{
+			// send termination message to workers
+			managerToWorker.sendMessageWithIdAndTerminate("Worker- stop!", "0");
+			waitsCounter = 0 ;
+			
+			List<Message> messageFromManagerList;
+	 		do{
+	 			messageFromManagerList = workerToManager.getMessagesMinimalVisibilityTime(1);
+	 			if( messageFromManagerList.size() == 1)
+	 					break;
+	 			try {
+					Thread.sleep(500);
+					waitsCounter++;
+					// if waiting to long- send another message to workers
+					if(waitsCounter == 10)
+						managerToWorker.sendMessageWithIdAndTerminate("Worker- stop!", "0");
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+	 		}while(messageFromManagerList.size() == 0 );
+	 		System.out.println("Manager: Worker finished!: " + messageFromManagerList.get(0).getBody());
+	 		workerToManager.deleteMessage(messageFromManagerList.get(0));
+	 		gNumOfWorkers--;
+	 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
+		}
+    	
+    	
  		// finish process
+ 		s3.deletebucket();
+
     	managerToWorker.deleteQueue();
     	workerToManager.deleteQueue();
     	// send message to local
     	managerToLocal.sendMessageWithId("I am finished", idOfTerminateRequester);
     	System.out.println("Manager: finished");
+    	// wait 10 second and then delete queues
+    	try {
+			Thread.sleep(10000);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
+        localToManager.deleteQueue();
+        managerToLocal.deleteQueue();
 	}
     
     public long countLines(S3Object inputFile) throws IOException {
     	// was taken from stack overflow
-        InputStream is = new BufferedInputStream(inputFile.getObjectContent());
-        try {
-            byte[] c = new byte[1024];
-            long count = 0;
-            int readChars = 0;
-            boolean empty = true;
-            while ((readChars = is.read(c)) != -1) {
-                empty = false;
-                for (int i = 0; i < readChars; ++i) {
-                    if (c[i] == '\n') {
-                        ++count;
-                    }
-                }
-            }
-            return (count == 0 && !empty) ? 1 : count;
-        } finally {
-            is.close();
-        }
+//        InputStream is = new BufferedInputStream(inputFile.getObjectContent());
+//        try {
+//            byte[] c = new byte[1024];
+//            long count = 0;
+//            int readChars = 0;
+//            boolean empty = true;
+//            while ((readChars = is.read(c)) != -1) {
+//                empty = false;
+//                for (int i = 0; i < readChars; ++i) {
+//                    if (c[i] == '\n') {
+//                        ++count;
+//                    }
+//                }
+//            }
+//            return (count == 0 && !empty) ? 1 : count;
+//        } finally {
+//            is.close();
+//        }
+		BufferedReader reader = new BufferedReader(new InputStreamReader(inputFile.getObjectContent()));
+    	long lines = 0;
+    	while (reader.readLine() != null) lines++;
+    	//reader.close();
+    	return lines;
     }
     
 	// read workers queue and parse the messages
@@ -300,19 +347,6 @@ public class Manager implements Runnable{
     		// if 1 - line added, do nothing
 
     	}
-    	managerToWorker.sendMessageWithIdAndTerminate("Worker- stop!", "0");
-    	List<Message> messageFromManagerList;
- 		do{
- 			messageFromManagerList = workerToManager.getMessagesMinimalVisibilityTime(1);
- 			if( messageFromManagerList.size() == 1)
- 					break;
- 			try {
-				Thread.sleep(500);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
- 		}while(messageFromManagerList.size() == 0 );
- 		System.out.println("Manager: Worker finished!: " + messageFromManagerList.get(0).getBody());
 	}
 	
 	private String getAndRemoveLastLine( File file ) {

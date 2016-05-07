@@ -19,19 +19,16 @@ import com.amazonaws.services.ec2.model.RunInstancesRequest;
 import com.amazonaws.services.ec2.model.ShutdownBehavior;
 import com.amazonaws.services.ec2.model.Tag;
 
-
-
 public class EC2 {
-	
 	private static final String keyPair = "ass1KeyPair";
 	private static final String securityGroup = "ass1SecurityGroup";
+	private static final String jarsBucketName = "dsps1jarsbucket";
 	private AmazonEC2 ec2;
 	private AWSCredentials credentials;
 	
 	public EC2(AWSCredentials credentials){
 		this.credentials = credentials;
 		this.ec2 = new AmazonEC2Client(this.credentials);
-
 	}
 	
 	public boolean checkIfManagerExist() {
@@ -92,7 +89,7 @@ public class EC2 {
         lines.add("AWS_SECRET_ACCESS_KEY=" + credentials.getAWSSecretKey());
         lines.add("AWS_DEFAULT_REGION=us-east-1");
         lines.add("export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_DEFAULT_REGION");
-        lines.add("aws s3 cp s3://" + "dsps1testbucket" + "/" + instanceType + ".jar" + instanceType + ".jar");
+        lines.add("aws s3 cp s3://" + jarsBucketName + "/" + instanceType + ".jar" + instanceType + ".jar");
         lines.add("echo accessKey=$AWS_ACCESS_KEY_ID > asafsarid.properties");
         lines.add("echo secretKey=$AWS_SECRET_ACCESS_KEY >> asafsarid.properties");
         if (instanceType == "manager")

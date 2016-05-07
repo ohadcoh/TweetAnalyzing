@@ -192,13 +192,6 @@ import remote.Manager;
  		}while(messageFromManagerList.size() == 0 );
  		Message messageFromManager = messageFromManagerList.get(0);
  		System.out.println("Manager ack message for termination: " + messageFromManager.getBody());
-
- 		// TODO: handle all deletes
-        s3.deletebucket();
-        // need to delete s3!!!
-        localToManager.deleteQueue();
-        managerToLocal.deleteQueue();
-        // need to delete clients!!
 	}
 	 
     // create HTML file from the analyzed tweets file
