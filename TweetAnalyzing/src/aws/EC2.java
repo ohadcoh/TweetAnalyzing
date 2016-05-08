@@ -1,5 +1,6 @@
 package aws;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
@@ -23,6 +24,7 @@ public class EC2 {
 	private static final String keyPair = "ass1KeyPair";
 	private static final String securityGroup = "MainSecurityGroup";
 	private static final String jarsBucketName = "dsps1jarsbucketasaf";
+	private static final String statisticsBucketName = "workersstatisticsasafohad";
 	private AmazonEC2 ec2;
 	private AWSCredentials credentials;
 	
@@ -42,7 +44,6 @@ public class EC2 {
 				List<Tag> tags = instance.getTags();
 				//System.out.println("Instance State: " + instance.getState().getName());
 				if (instance.getPublicIpAddress()== null){
-					System.out.println("no public ip for instance");
 					continue;
 				}
 				if (!instance.getState().getName().equals("terminated")){
@@ -54,6 +55,29 @@ public class EC2 {
 		    }
 		}
 		return false;
+	}
+	
+	public int countNumOfWorkers(){
+		DescribeInstancesResult result = ec2.describeInstances();
+		List<Reservation> reservations = result.getReservations();
+		int counter = 0;
+		for (Reservation reservation : reservations) {
+			List<Instance> instances = reservation.getInstances();
+			
+			for (Instance instance : instances) {
+				List<Tag> tags = instance.getTags();
+				//System.out.println("Instance State: " + instance.getState().getName());
+				if (instance.getPublicIpAddress()== null){
+					System.out.println("no public ip for instance");
+					continue;
+				}
+				if (!instance.getState().getName().equals("terminated")){
+					if (tags.size() == 0)
+						counter++;
+				}
+		    }
+		}
+		return counter;
 	}
 	
 	public void startManagerInstance(){
@@ -103,6 +127,8 @@ public class EC2 {
         	lines.add("java -Xms256m -Xmx768m -jar manager.jar");
         else
         	lines.add("java -Xms256m -Xmx768m -jar worker.jar");
+        lines.add("aws s3 cp /var/log/cloud-init-output.log s3://" + statisticsBucketName + 
+        							"/" + instanceType + "_" + LocalDateTime.now() + ".txt");
         lines.add("shutdown -h now");
         String str = new String(Base64.encodeBase64(join(lines, "\n").getBytes()));
         return str;

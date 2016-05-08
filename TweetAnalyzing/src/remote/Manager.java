@@ -145,6 +145,7 @@ public class Manager implements Runnable{
 			int tempN = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
 			String tempId = inputMessage.getMessageAttributes().get("id").getStringValue();
 			Long tempTaskCounter = parseNewTask(inputMessage, tempId);
+			gNumOfWorkers = ec2.countNumOfWorkers();
 			int neededWorkers = (int) (tempTaskCounter/tempN - gNumOfWorkers);
 			// if need to launch more workers 
 			if(neededWorkers > 0)
@@ -217,6 +218,7 @@ public class Manager implements Runnable{
 	private void terminate(){
 		// close all workers and wait for them to finish properly
 		int waitsCounter;
+		gNumOfWorkers = ec2.countNumOfWorkers();
 		while(gNumOfWorkers != 0)
 		{
 			// send termination message to workers
@@ -253,41 +255,7 @@ public class Manager implements Runnable{
     	// send message to local
     	managerToLocal.sendMessageWithId("I am finished", idOfTerminateRequester);
     	System.out.println("Manager: finished");
-    	// wait 10 second and then delete queues
-//    	try {
-//			Thread.sleep(10000);
-//		} catch (InterruptedException e) {
-//			e.printStackTrace();
-//		}
-
 	}
-    
-    public long countLines(S3Object inputFile) throws IOException {
-    	// was taken from stack overflow
-//        InputStream is = new BufferedInputStream(inputFile.getObjectContent());
-//        try {
-//            byte[] c = new byte[1024];
-//            long count = 0;
-//            int readChars = 0;
-//            boolean empty = true;
-//            while ((readChars = is.read(c)) != -1) {
-//                empty = false;
-//                for (int i = 0; i < readChars; ++i) {
-//                    if (c[i] == '\n') {
-//                        ++count;
-//                    }
-//                }
-//            }
-//            return (count == 0 && !empty) ? 1 : count;
-//        } finally {
-//            is.close();
-//        }
-		BufferedReader reader = new BufferedReader(new InputStreamReader(inputFile.getObjectContent()));
-    	long lines = 0;
-    	while (reader.readLine() != null) lines++;
-    	reader.close();
-    	return lines;
-    }
     
 	// read workers queue and parse the messages
 	private void readFromWorkers() {
@@ -409,7 +377,6 @@ public class Manager implements Runnable{
     	//Get Counter From File
     	String lastLine = getAndRemoveLastLine(file);
     	int counter = Integer.valueOf(lastLine);
-    	//System.out.println(counter);
     	counter--;
     	try {
 			FileWriter writer = new FileWriter(file, true);
