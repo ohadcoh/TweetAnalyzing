@@ -219,6 +219,13 @@ public class Manager implements Runnable{
 		// close all workers and wait for them to finish properly
 		int waitsCounter;
 		gNumOfWorkers = ec2.countNumOfWorkers();
+		Writer writer= null;
+		File statisticsFile = new File("./allWorkersStatistics.txt");
+		try {
+			writer = new FileWriter(statisticsFile);
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
 		while(gNumOfWorkers != 0)
 		{
 			// send termination message to workers
@@ -241,11 +248,24 @@ public class Manager implements Runnable{
 				}
 	 		}while(messageFromManagerList.size() == 0 );
 	 		System.out.println("Manager: Worker finished!: " + messageFromManagerList.get(0).getBody());
+	 		try {
+				writer.append(messageFromManagerList.get(0).getBody() + "\n");
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 	 		workerToManager.deleteMessage(messageFromManagerList.get(0));
 	 		gNumOfWorkers--;
 	 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
 		}
-    	
+		try {
+			writer.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		S3 statisticsS3 = new S3(credentials, "workerststistics");
+		statisticsS3.uploadFile("./allWorkersStatistics.txt");
+    	statisticsFile.delete();
     	
  		// finish process
  		s3.deletebucket();
