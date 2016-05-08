@@ -11,6 +11,9 @@ import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.io.Writer;
 import java.util.List;
+import java.util.concurrent.Semaphore;
+
+import org.joda.time.LocalDateTime;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.PropertiesCredentials;
@@ -37,7 +40,8 @@ public class Manager implements Runnable{
 	private boolean gTerminate;
 	private String idOfTerminateRequester;
 	// variable for threads
-	private Runnable readInputFromWorkers;
+	private Runnable readFromWorkers;
+	private Semaphore outputFileLock;
 	
 	public static void main(String[] args)
 	{
@@ -68,7 +72,7 @@ public class Manager implements Runnable{
 					String s3BucketName,
 					String managerToWorkerSQSQueueName,
 					String workerToManagerSQSQueueName){
-		// 1. creating credentials
+		// 1. creating credentials- exception: only return, no queue for informing local app
 		try {
 			credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
 		} catch (FileNotFoundException e) {
@@ -85,11 +89,12 @@ public class Manager implements Runnable{
 		workerToManager = new SQS(credentials, workerToManagerSQSQueueName);
 		s3 				= new S3(credentials, s3BucketName);
 		ec2				= new EC2(credentials);
-		// 4. init internal info
-		numberOfOpenTasks = 0;
-		gNumOfWorkers 	= 0;
-		gTerminate		= false; // on init no terminate
-		readInputFromWorkers = new Runnable() { // init thread for reading input from worker
+		// 3. init internal info
+		numberOfOpenTasks 	= 0;
+		gNumOfWorkers 		= 0;
+		outputFileLock 		= new Semaphore(1);
+		gTerminate			= false; // on init no terminate
+		readFromWorkers = new Runnable() { // init thread for reading input from worker
             public void run() {
                 Manager.this.readFromWorkers();
             }
@@ -99,7 +104,7 @@ public class Manager implements Runnable{
 	// run the manager
 	public void run() {
 		// create and run thread for reading messages from workers
-		Thread workersThread = new Thread(readInputFromWorkers);
+		Thread workersThread = new Thread(readFromWorkers);
 		workersThread.start();
 		
 		// this thread will read from local applications queue
@@ -177,12 +182,15 @@ public class Manager implements Runnable{
 			// read how many lines in the original file
 			//numOfLines = countLines(copyOfInputFile);
 			Writer writer = new FileWriter(tempFile);
+			outputFileLock.acquire();
 			// write counter
 			writer.write(String.valueOf(numOfLines) + "\n");
+			outputFileLock.release();
 			// close writer
 			writer.close();
-		} catch (IOException e4) {
+		} catch (IOException | InterruptedException e4) {
 			e4.printStackTrace();
+			return -1;
 		}
 
 		// add all lines to workers queue
@@ -193,7 +201,7 @@ public class Manager implements Runnable{
 				line = reader.readLine();
 			} catch (IOException e) {
 				e.printStackTrace();
-				return (long) -1;
+				return -1;
 			}           
     		if (line == null || line.length() == 0)
     			break;
@@ -205,7 +213,7 @@ public class Manager implements Runnable{
 			reader.close();
 		} catch (IOException e1) {
 			e1.printStackTrace();
-			return (long) -1;
+			return -1;
 		}
     	// update line counter
     	updateLineCounter(numOfLines, "./" + taskId + "OutputFile.txt");
@@ -220,7 +228,8 @@ public class Manager implements Runnable{
 		int waitsCounter;
 		gNumOfWorkers = ec2.countNumOfWorkers();
 		Writer writer= null;
-		File statisticsFile = new File("./allWorkersStatistics.txt");
+		String statisticsFileName = "./" + LocalDateTime.now() + "_allWorkersStatistics.txt";
+		File statisticsFile = new File(statisticsFileName);
 		try {
 			writer = new FileWriter(statisticsFile);
 		} catch (IOException e1) {
@@ -264,7 +273,7 @@ public class Manager implements Runnable{
 			e.printStackTrace();
 		}
 		S3 statisticsS3 = new S3(credentials, "workerststistics");
-		statisticsS3.uploadFile("./allWorkersStatistics.txt");
+		statisticsS3.uploadFile(statisticsFileName);
     	statisticsFile.delete();
     	
  		// finish process
@@ -289,7 +298,6 @@ public class Manager implements Runnable{
     			try {
 					Thread.sleep(300);
 				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
 					e.printStackTrace();
 				}
     			continue;
@@ -303,8 +311,20 @@ public class Manager implements Runnable{
     			continue;
     		}
 
-    		String msgTaskId = messagesList.get(0).getMessageAttributes().get("id").getStringValue();
+    		String msgTaskId;
+    		try {
+    		msgTaskId = messagesList.get(0).getMessageAttributes().get("id").getStringValue();
+    		} catch (NullPointerException e) {
+    			e.printStackTrace();
+    			continue;
+    		}
+    		try {
+				outputFileLock.acquire();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
     		int taskFileStatus = addLineToFile(messagesList.get(0).getBody(), "./" + msgTaskId + "OutputFile.txt");
+    		outputFileLock.release();
     		workerToManager.deleteMessage(messagesList.get(0));
     		// if -1- error
     		if(taskFileStatus == -1)
