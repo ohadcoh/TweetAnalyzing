@@ -6,11 +6,12 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
-import java.time.LocalDateTime;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+
+import org.joda.time.LocalDateTime;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.PropertiesCredentials;
@@ -104,39 +105,12 @@ import aws.SQS;
  		System.out.println("LocalApp: File Uploaded\n");
  		// 2. send key to manager with attributes (numOfWorkers and my id)
  		localToManager.sendMessageWithNumOfWorkersAndId(inputFileS3key, String.valueOf(n), id);
-		// 3. find if there is manager instance
-//		if (!ec2.checkIfManagerExist())
-//		{
-//			//will be added when we know how to bootstrap
-//			try {
-//				//ec2.startManagerInstance();
-//			} catch (Exception e) {
-//				e.printStackTrace();
-//			}
-//		}
-		// for now - create manager
-		// hard coded names
-//		String propertiesFilePath 				= "./ohadInfo.properties";
-//		String localToManagerSQSQueueName		= "localToManagerasafohad";
-//		String managerToLocalSQSQueueName		= "managerToLocalasafohad";
-//		String s3BucketName						= "dspsass1bucketasafohad";
-//		String managerToWorkerSQSQueueName		= "managerToWorkerasafohad";
-//		String workerToManagerSQSQueueName		= "workerToManagerasafohad";
-		// create manager instance
+		// 3. find if there is manager instance and if not create manager instance
 		if(!ec2.checkIfManagerExist())
 		{
 			System.out.println("LocalApp: manager does not exist");
 			ec2.startManagerInstance();
 		}
-		System.out.println("after check");
-//		Manager myManager = new Manager(propertiesFilePath,
-//										localToManagerSQSQueueName,
-//										managerToLocalSQSQueueName,
-//										s3BucketName,
-//										managerToWorkerSQSQueueName,
-//										workerToManagerSQSQueueName);
-//		new Thread(myManager).start();
-		
 
  		// 4. read message- analyzed data
  		// read until receive answer from manager
@@ -213,12 +187,20 @@ import aws.SQS;
 		String output = "<HTML>\n<HEAD>\n</HEAD>\n<BODY>\n";
 		// isolate all data, add with the right color and add entities
 		for (String line : allLines) {
-			//System.out.println("Line: " + line);
+			//System.out.println("LocalApp: html line-  " + line);
 			String sentiment  	= line.substring(0, line.indexOf(';'));
 			String entitiesAndTweet = line.substring(line.indexOf(';')+1, line.length());
 			String entities 	= entitiesAndTweet.substring(0, entitiesAndTweet.indexOf(';'));
 			String tweet 		= entitiesAndTweet.substring(entitiesAndTweet.indexOf(';')+1, entitiesAndTweet.length());
-			String rawTweet		= tweet.substring(tweet.indexOf('"')+1,tweet.lastIndexOf('"'));
+			if(tweet.equals(""))
+				continue;
+			String rawTweet = "";
+			try {
+				rawTweet		= tweet.substring(tweet.indexOf('"')+1,tweet.lastIndexOf('"'));
+			} catch (IndexOutOfBoundsException e) {
+				e.printStackTrace();
+				continue;
+			}
             output += "<p> <b><font color=\"" + sentiment + "\"> " + rawTweet + "</font></b> " + entities + "</p>\n";
 		}
 		// close the HTML string
