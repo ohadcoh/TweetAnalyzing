@@ -40,6 +40,11 @@ public class EC2 {
 			
 			for (Instance instance : instances) {
 				List<Tag> tags = instance.getTags();
+				System.out.println("Instance State: " + instance.getState().getName());
+				if (instance.getPublicIpAddress()== null){
+					System.out.println("no public ip for instance");
+					continue;
+				}
 				if (!instance.getState().getName().equals("Terminated")){
 					for (Tag tag : tags){
 						if (tag.getKey().equals("Name") && tag.getValue().equals("Manager"))

@@ -6,6 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.time.LocalDateTime;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -34,6 +35,7 @@ import aws.SQS;
 	private boolean terminate;
 	private int n;
 
+	
 	// main function
     public static void main(String[] args) throws Exception {
     	// 1. parse input arguments
@@ -44,6 +46,7 @@ import aws.SQS;
     		return;
     	}
 
+    	System.out.println(LocalDateTime.now());
     	boolean terminate = false;
 		String inputFileName = args[0];
 		String outputFileName = args[1];
@@ -66,6 +69,7 @@ import aws.SQS;
 		myTweetAnaylizer.run(inputFileName, outputFileName);
 		// 6. terminate analyzing
 		myTweetAnaylizer.terminate();
+		System.out.println(LocalDateTime.now());
 		System.out.println("LocalApp: Bye bye");
 	}
     
@@ -119,13 +123,12 @@ import aws.SQS;
 //		String managerToWorkerSQSQueueName		= "managerToWorkerasafohad";
 //		String workerToManagerSQSQueueName		= "workerToManagerasafohad";
 		// create manager instance
-// 		System.out.println("before check");
-//		if(!ec2.checkIfManagerExist())
-//		{
+		if(!ec2.checkIfManagerExist())
+		{
 			System.out.println("LocalApp: manager does not exist");
 			ec2.startManagerInstance();
-//		}
-//		System.out.println("after check");
+		}
+		System.out.println("after check");
 //		Manager myManager = new Manager(propertiesFilePath,
 //										localToManagerSQSQueueName,
 //										managerToLocalSQSQueueName,

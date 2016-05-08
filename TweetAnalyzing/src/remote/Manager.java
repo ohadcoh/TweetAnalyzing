@@ -266,11 +266,11 @@ public class Manager implements Runnable{
     	managerToLocal.sendMessageWithId("I am finished", idOfTerminateRequester);
     	System.out.println("Manager: finished");
     	// wait 10 second and then delete queues
-    	try {
-			Thread.sleep(10000);
-		} catch (InterruptedException e) {
-			e.printStackTrace();
-		}
+//    	try {
+//			Thread.sleep(10000);
+//		} catch (InterruptedException e) {
+//			e.printStackTrace();
+//		}
 
 	}
     
