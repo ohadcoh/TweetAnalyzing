@@ -40,10 +40,11 @@ public class EC2 {
 			
 			for (Instance instance : instances) {
 				List<Tag> tags = instance.getTags();
-				
-				for (Tag tag : tags){
-					if (tag.getKey().equals("Name") && tag.getValue().equals("Manager"))
-						return true;
+				if (!instance.getState().getName().equals("Terminated")){
+					for (Tag tag : tags){
+						if (tag.getKey().equals("Name") && tag.getValue().equals("Manager"))
+							return true;
+					}
 				}
 		    }
 		}
