@@ -1,11 +1,7 @@
 package remote;
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.OutputStreamWriter;
-import java.io.Writer;
 import java.util.List;
 import java.util.Properties;
 import java.util.UUID;
@@ -18,7 +14,6 @@ import org.jsoup.nodes.Document;
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.sqs.model.Message;
-import aws.S3;
 import aws.SQS;
 
 import edu.stanford.nlp.ling.CoreAnnotations;
@@ -42,7 +37,6 @@ public class Worker implements Runnable {
 	private AWSCredentials credentials;
 	private SQS inputSQS;
 	private SQS outputSQS;
-	private S3 s3;
 	// Local info
 	private String id;
 	private long numOfLinksHandled;
@@ -77,8 +71,6 @@ public class Worker implements Runnable {
 			e.printStackTrace();
 			return;
 		}
-		// 2. create s3 client for statistics
-		s3 = new S3(credentials, statisticsBucketName);
 		// 3. create sqs client and two queues
 		inputSQS = new SQS(credentials, inputSQSQueueName);
 		outputSQS = new SQS(credentials, outputSQSQueueName);
@@ -96,9 +88,23 @@ public class Worker implements Runnable {
 	}
 	
 	public void run() {
-		analyzeTweet();		
+		try {
+			analyzeTweet();	
+			terminate(false);
+		} catch (Exception e) {
+			e.printStackTrace();
+			terminate(true);
+		}
+		
 	}
 	
+	private void terminate(boolean crush) {
+		
+		outputSQS.sendMessageWorkerFinished(LocalDateTime.now() + "###Worker " + id + " handled: " + numOfLinksHandled + 
+				". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.\n"
+						+ "Worker has crush: " + crush, id);		
+	}
+
 	public void analyzeTweet() {
 		System.out.println("Worker: Start working!");
 		while(true){
@@ -149,24 +155,7 @@ public class Worker implements Runnable {
 			outputSQS.sendMessageWithId(sentimentColor + ";" + entities + ";" + tweet, taskId);
 			// 7. delete message
 			inputSQS.deleteMessage(inputMessage);
-		}
-
-		try {
-			File statistics = new File("statisticsOfWorker" + id + ".txt");
-			Writer writer = new OutputStreamWriter(new FileOutputStream(statistics));
-			writer.write(LocalDateTime.now() + "### Worker " + id + " handled: " + numOfLinksHandled + 
-					". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.");
-			writer.close();
-			s3.uploadFile("statisticsOfWorker" + id + ".txt");
-			statistics.delete();
-		} catch (IOException e) {
-			e.printStackTrace();
-			outputSQS.sendMessageError("Statistics IO exception", id);
-			return;
-		}
-		
-		outputSQS.sendMessageWorkerFinished("Worker " + id + " handled: " + numOfLinksHandled + 
-				". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.", id);
+		}	
 	}
 
 	// find named entities in a tweet

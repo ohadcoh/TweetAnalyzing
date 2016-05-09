@@ -103,21 +103,32 @@ public class Manager implements Runnable{
 
 	// run the manager
 	public void run() {
-		// create and run thread for reading messages from workers
-		Thread workersThread = new Thread(readFromWorkers);
-		workersThread.start();
-		
-		// this thread will read from local applications queue
-		readFromLocalApps();
-		
-		// wait for other thread to finish
+		// wrap all actions
 		try {
-			workersThread.join();
-		} catch (InterruptedException e) {
+			// create and run thread for reading messages from workers
+			Thread workersThread = new Thread(readFromWorkers);
+			workersThread.start();
+			
+			// this thread will read from local applications queue
+			readFromLocalApps();
+			
+			// wait for other thread to finish
+			try {
+				workersThread.join();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		
-		terminate();
+		try {
+			terminate();
+		} catch (Exception e) {
+			e.printStackTrace();
+			managerToLocal.sendMessageWithId("I crushed!", idOfTerminateRequester);
+		}
+		
 		return;
 	}
 
@@ -182,13 +193,12 @@ public class Manager implements Runnable{
 			// read how many lines in the original file
 			//numOfLines = countLines(copyOfInputFile);
 			Writer writer = new FileWriter(tempFile);
-			outputFileLock.acquire();
+			
 			// write counter
 			writer.write(String.valueOf(numOfLines) + "\n");
-			outputFileLock.release();
 			// close writer
 			writer.close();
-		} catch (IOException | InterruptedException e4) {
+		} catch (IOException e4) {
 			e4.printStackTrace();
 			return -1;
 		}
@@ -216,7 +226,13 @@ public class Manager implements Runnable{
 			return -1;
 		}
     	// update line counter
-    	updateLineCounter(numOfLines, "./" + taskId + "OutputFile.txt");
+    	try {
+			outputFileLock.acquire();
+			updateLineCounter(numOfLines, "./" + taskId + "OutputFile.txt");
+			outputFileLock.release();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
     	// update the numOfLines
     	numberOfOpenTasks++;
 		return numOfLines;
@@ -302,29 +318,24 @@ public class Manager implements Runnable{
 				}
     			continue;
     		}
-    		// check if this 'worker finished' message
-    		if(messagesList.get(0).getMessageAttributes().get("workerId") != null)
-    		{
-    			gNumOfWorkers--;
-    			System.out.println("Manager: received end message from worker " + messagesList.get(0).getBody());
-    			workerToManager.deleteMessage(messagesList.get(0));
-    			continue;
-    		}
 
     		String msgTaskId;
     		try {
-    		msgTaskId = messagesList.get(0).getMessageAttributes().get("id").getStringValue();
+    			msgTaskId = messagesList.get(0).getMessageAttributes().get("id").getStringValue();
     		} catch (NullPointerException e) {
     			e.printStackTrace();
     			continue;
     		}
+    		int taskFileStatus = -1;
     		try {
 				outputFileLock.acquire();
+				taskFileStatus = addLineToFile(messagesList.get(0).getBody(), "./" + msgTaskId + "OutputFile.txt");
+	    		outputFileLock.release();
 			} catch (InterruptedException e) {
 				e.printStackTrace();
+				continue;
 			}
-    		int taskFileStatus = addLineToFile(messagesList.get(0).getBody(), "./" + msgTaskId + "OutputFile.txt");
-    		outputFileLock.release();
+    		
     		workerToManager.deleteMessage(messagesList.get(0));
     		// if -1- error
     		if(taskFileStatus == -1)
