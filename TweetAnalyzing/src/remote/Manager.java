@@ -160,13 +160,15 @@ public class Manager implements Runnable{
 			// 3. if not terminate- request for new task
 			int tempN = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
 			String tempId = inputMessage.getMessageAttributes().get("id").getStringValue();
-			Long tempTaskCounter = parseNewTask(inputMessage, tempId);
+			long tempTaskCounter = parseNewTask(inputMessage, tempId);
 			gNumOfWorkers = ec2.countNumOfWorkers();
 			int neededWorkers = (int) (tempTaskCounter/tempN - gNumOfWorkers);
 			// if need to launch more workers 
+			System.out.println("Manager: Current Msg Counter = " + tempTaskCounter);
+			System.out.println("Manager: N = " + tempN);
+			System.out.println("Manager: Creating " + neededWorkers + " workers.");
 			if(neededWorkers > 0)
 			{
-				System.out.println("Manager: Creating " + neededWorkers + " workers.");
 				//ec2.startWorkerInstances(neededWorkers);
 				gNumOfWorkers += neededWorkers;
 				ec2.startWorkerInstances(neededWorkers);
@@ -225,6 +227,7 @@ public class Manager implements Runnable{
 			e1.printStackTrace();
 			return -1;
 		}
+    	System.out.println("Num of lines in file: " + numOfLines);
     	// update line counter
     	try {
 			outputFileLock.acquire();

@@ -89,10 +89,18 @@ public class EC2 {
 		request.withInstanceInitiatedShutdownBehavior(ShutdownBehavior.Terminate);
 		request.withUserData(getUserDataScript("manager"));
 		List<Instance> instances = ec2.runInstances(request).getReservation().getInstances();
+		try {
+			Thread.sleep(2000);
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		for (Instance instance : instances) {
+			//Create Tag
 			CreateTagsRequest createTagsRequest=new CreateTagsRequest().withResources(instance.getInstanceId()).withTags(new Tag("Name","Manager"));
 			ec2.createTags(createTagsRequest);
 		}
+		System.out.println("Manager Tag Created");
 	}
 	
 	public void startWorkerInstances(int numOfInstances){
