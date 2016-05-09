@@ -121,7 +121,8 @@ public class Worker implements Runnable {
 				continue;
 			}
 			// 2. check if terminated request
-			if(inputMessageList.get(0).getMessageAttributes().get("terminate") != null)
+			if(inputMessageList.get(0).getMessageAttributes() != null)
+				if(inputMessageList.get(0).getMessageAttributes().get("terminate") != null)
 			{
 				System.out.println("Worker: received termination request");
 				inputSQS.deleteMessage(inputMessageList.get(0));
@@ -131,11 +132,21 @@ public class Worker implements Runnable {
 			// 3. isolate id and link
 			numOfLinksHandled++;
 			Message inputMessage = inputMessageList.get(0);
-			String taskId = inputMessage.getMessageAttributes().get("id").getStringValue();
-			String tweetLink = inputMessage.getBody();
+			String taskId = "";
+			String tweetLink = "";
 			Document tweetPage;
-			// 4. isolate tweet from link
-			String tweet = new String("");
+			String tweet = "";
+			try { 
+				taskId = inputMessage.getMessageAttributes().get("id").getStringValue();
+				tweetLink = inputMessage.getBody();
+				// 4. isolate tweet from link
+				tweet = new String("");
+			} catch (Exception e) {
+				e.printStackTrace();
+				inputSQS.deleteMessage(inputMessage);
+				numOfLinksBroken++;
+				continue;
+			}
 			try {
 				tweetPage = Jsoup.connect(tweetLink).get();
 				tweet = tweetPage.select("title").first().text().replace("\n", "").replace("\r", "");
