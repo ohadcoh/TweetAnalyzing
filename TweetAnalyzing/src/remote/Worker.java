@@ -87,6 +87,7 @@ public class Worker implements Runnable {
 		numOfLinksOk		= 0;
 	}
 	
+	//TODO: nobody is calling run() !!!
 	public void run() {
 		try {
 			analyzeTweet();	

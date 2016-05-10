@@ -86,7 +86,7 @@ import aws.SQS;
 			credentials = new PropertiesCredentials(new FileInputStream(propertiesFilePath));
 			System.out.println("LocalApp: Credentials created.");
 	 	 	ec2 = new EC2(credentials);
-	 		// 2. uploading the input file to S3
+	 		// 2. creating S3 client and bucket
 	 		s3 = new S3(credentials, bucketName);
 	 		// 3. create queue (from local app to manager) and send message with the key of the file
 	 		localToManager = new SQS(credentials, localToManagerQueueName);
@@ -102,6 +102,9 @@ import aws.SQS;
 	private void run(String inputFileName, String outputFileName) {
 		// 1. upload input file to s3
  		String inputFileS3key = s3.uploadFile(inputFileName);
+ 		
+ 		//TODO: add check if uploadFile returns null
+ 		
  		System.out.println("LocalApp: File Uploaded\n");
  		// 2. send key to manager with attributes (numOfWorkers and my id)
  		localToManager.sendMessageWithNumOfWorkersAndId(inputFileS3key, String.valueOf(n), id);
@@ -117,6 +120,9 @@ import aws.SQS;
  		List<Message> messageFromManagerList;
  		do{
  			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
+ 			
+ 			//TODO: something here won't work with 2 local apps
+ 			
  			if( messageFromManagerList.size() == 1)
  				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
  					break;
@@ -126,6 +132,7 @@ import aws.SQS;
 				e.printStackTrace();
 			}
  		}while(messageFromManagerList.size() == 0 );
+ 		
  		Message messageFromManager = messageFromManagerList.get(0);
  		managerToLocal.deleteMessage(messageFromManagerList.get(0));
         System.out.println("LocalApp: Message from Manager with my id: " + messageFromManager.getBody());
@@ -164,6 +171,9 @@ import aws.SQS;
      		List<Message> messageFromManagerList;
      		do{
      			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
+     			
+     			//TODO: something here wont work (if the message is not with equal id)
+     			
      			if(messageFromManagerList.size() == 1)
      				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
      					break;
