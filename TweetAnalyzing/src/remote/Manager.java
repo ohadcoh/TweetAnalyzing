@@ -285,51 +285,58 @@ public class Manager implements Runnable{
 		} catch (IOException e1) {
 			e1.printStackTrace();
 		}
-		while(gNumOfWorkers != 0)
+		while((gNumOfWorkers = ec2.countNumOfWorkers()) != 0)
 		{
 			// send termination message to workers
 			managerToWorker.sendMessageWithIdAndTerminate("Worker- stop!", "0");
+			try {
+				Thread.sleep(1000);
+			} catch (InterruptedException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
 			//waitsCounter = 0 ;
 			
-			List<Message> messageFromManagerList;
-			boolean workerTerminates = false;
-			while (!workerTerminates);
-	 		{
-	 			messageFromManagerList = workerToManager.getMessages(1);
-	 			if(messageFromManagerList.size() == 1){
-	 				//workerTerminates = true;
-	 				//continue;
-	 				break;
-	 			}
-//	 			else if (messageFromManagerList.size() == 1){
-//	 				workerToManager.deleteMessage(messageFromManagerList.get(0));
+//			List<Message> messageFromManagerList;
+//			boolean workerTerminates = false;
+//			while (!workerTerminates);
+//	 		{
+//	 			messageFromManagerList = workerToManager.getMessages(1);
+//	 			if(messageFromManagerList.size() == 1){
+//	 				//workerTerminates = true;
+//	 				//continue;
+//	 				break;
 //	 			}
-//	 			try {
-//					Thread.sleep(500);
-//					waitsCounter++;
-//					// if waiting to long- send another message to workers
-//					if(waitsCounter == 10)
-//					{
-//						//if( ec2.countNumOfWorkers() == 0) // no more workers
-//						//	break;
-//						workerToManager.sendMessageWithIdAndTerminate("Worker- stop!", "0");
-//						System.out.println("manager after waits");
-//					}
-//				} catch (InterruptedException e) {
-//					e.printStackTrace();
-//				}
-	 		}
-//	 		if(workerTerminates == false) // no workers
-//	 			break;
-	 		try {
-		 		System.out.println("Manager: Worker finished!: " + messageFromManagerList.get(0).getBody());
-				writer.append(messageFromManagerList.get(0).getBody() + "\n");
-		 		workerToManager.deleteMessage(messageFromManagerList.get(0));
-		 		gNumOfWorkers--;
-		 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+////	 			else if (messageFromManagerList.size() == 1){
+////	 				workerToManager.deleteMessage(messageFromManagerList.get(0));
+////	 			}
+////	 			try {
+////					Thread.sleep(500);
+////					waitsCounter++;
+////					// if waiting to long- send another message to workers
+////					if(waitsCounter == 10)
+////					{
+////						//if( ec2.countNumOfWorkers() == 0) // no more workers
+////						//	break;
+////						workerToManager.sendMessageWithIdAndTerminate("Worker- stop!", "0");
+////						System.out.println("manager after waits");
+////					}
+////				} catch (InterruptedException e) {
+////					e.printStackTrace();
+////				}
+//	 		}
+////	 		if(workerTerminates == false) // no workers
+////	 			break;
+//	 		try {
+//		 		System.out.println("Manager: Worker finished!: " + messageFromManagerList.get(0).getBody());
+//				writer.append(messageFromManagerList.get(0).getBody() + "\n");
+//		 		workerToManager.deleteMessage(messageFromManagerList.get(0));
+//		 		gNumOfWorkers--;
+//		 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
+//			} catch (IOException e) {
+//				e.printStackTrace();
+//			}
+	 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
 
 		}
 		try {
