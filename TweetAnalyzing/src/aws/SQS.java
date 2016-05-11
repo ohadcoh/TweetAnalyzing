@@ -252,7 +252,7 @@ public class SQS {
 	    	ReceiveMessageRequest receiveMessageRequest = new ReceiveMessageRequest(url);
 	    	if(numOfMsgs > 10)
 	    		numOfMsgs = 10;
-	    	receiveMessageRequest.withMaxNumberOfMessages(numOfMsgs).withVisibilityTimeout(1).
+	    	receiveMessageRequest.withMaxNumberOfMessages(numOfMsgs).//withVisibilityTimeout(1).
 	    				withMessageAttributeNames("id").
 	    				withMessageAttributeNames("terminate").
 	    				withMessageAttributeNames("numOfWorkers");
