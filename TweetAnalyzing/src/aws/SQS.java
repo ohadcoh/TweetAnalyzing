@@ -131,8 +131,10 @@ public class SQS {
 		try{
 	        //System.out.println("Sending message worker finished.\n");
 	        MessageAttributeValue idValue 	= new MessageAttributeValue().withDataType("String").withStringValue(id);
+	        MessageAttributeValue terminateValue 	= new MessageAttributeValue().withDataType("String").withStringValue("true");
 	        SendMessageRequest messageRequest = new SendMessageRequest(url, message).
-	        		addMessageAttributesEntry("workerId", idValue);
+	        											addMessageAttributesEntry("workerId", idValue).
+	        											addMessageAttributesEntry("terminate", terminateValue);
 	        sqs.sendMessage(messageRequest);
 	        return 0;
 		} catch (AmazonServiceException ase) {
@@ -279,7 +281,6 @@ public class SQS {
 	public void deleteMessage(Message message){
 		try{
 			// Delete a message
-	        System.out.println("Deleting a message.\n");
 	        String messageRecieptHandle = message.getReceiptHandle();
 	        sqs.deleteMessage(new DeleteMessageRequest(url, messageRecieptHandle));
 	        

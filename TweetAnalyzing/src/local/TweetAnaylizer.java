@@ -102,9 +102,7 @@ import aws.SQS;
 	private void run(String inputFileName, String outputFileName) {
 		// 1. upload input file to s3
  		String inputFileS3key = s3.uploadFile(inputFileName);
- 		
- 		//TODO: add check if uploadFile returns null
- 		
+ 		 		
  		System.out.println("LocalApp: File Uploaded\n");
  		// 2. send key to manager with attributes (numOfWorkers and my id)
  		localToManager.sendMessageWithNumOfWorkersAndId(inputFileS3key, String.valueOf(n), id);
@@ -118,28 +116,26 @@ import aws.SQS;
  		// 4. read message- analyzed data
  		// read until receive answer from manager
  		List<Message> messageFromManagerList;
- 		do{
+ 		S3Object outputFile = null;
+ 		boolean msgFound = false;
+ 		
+ 		while (!msgFound){
  			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
- 			
- 			//TODO: something here won't work with 2 local apps
- 			
- 			if( messageFromManagerList.size() == 1)
- 				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
- 					break;
- 			try {
+ 			for (Message message : messageFromManagerList){
+ 				if (message.getMessageAttributes().get("id").getStringValue().equals(id)){
+ 					msgFound = true;
+ 			        System.out.println("LocalApp: Message from Manager with my id: " + message.getBody());
+ 			        // 7. download the output file, and delete it      
+ 			        outputFile = s3.downloadFile(message.getBody());
+ 			        s3.deleteFile(message.getBody());
+ 				}
+ 			}
+			try {
 				Thread.sleep(500);
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
- 		}while(messageFromManagerList.size() == 0 );
- 		
- 		Message messageFromManager = messageFromManagerList.get(0);
- 		managerToLocal.deleteMessage(messageFromManagerList.get(0));
-        System.out.println("LocalApp: Message from Manager with my id: " + messageFromManager.getBody());
- 		
-        // 7. download the output file, write it to HTML and delete it        
-        S3Object outputFile = s3.downloadFile(messageFromManager.getBody());
-        s3.deleteFile(messageFromManager.getBody());
+ 		}
 
         // 8. create HTML file
         BufferedReader reader = new BufferedReader(new InputStreamReader(outputFile.getObjectContent()));
@@ -169,22 +165,37 @@ import aws.SQS;
     		// 4. read ack terminate message
 	 		
      		List<Message> messageFromManagerList;
-     		do{
+     		boolean msgFound = false;
+     		
+     		while (!msgFound){
      			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
-     			
-     			//TODO: something here wont work (if the message is not with equal id)
-     			
-     			if(messageFromManagerList.size() == 1)
-     				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
-     					break;
-     			try {
-    				Thread.sleep(500);
-    			} catch (InterruptedException e) {
-    				e.printStackTrace();
-    			}
-     		}while(messageFromManagerList.size() == 0 );
-     		Message messageFromManager = messageFromManagerList.get(0);
-     		System.out.println("Manager ack message for termination: " + messageFromManager.getBody());
+     			for (Message message : messageFromManagerList){
+     				if (message.getMessageAttributes().get("id").getStringValue().equals(id)){
+     					msgFound = true;
+     					System.out.println("Manager ack message for termination: " + message.getBody());
+     				}
+     			}
+				try {
+					Thread.sleep(500);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+     		}
+//     		do{
+//     			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
+//     			
+//     			
+//     			if(messageFromManagerList.size() == 1)
+//     				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
+//     					break;
+//     				else
+//     					continue;
+//     			try {
+//    				Thread.sleep(500);
+//    			} catch (InterruptedException e) {
+//    				e.printStackTrace();
+//    			}
+//     		}while(messageFromManagerList.size() == 0 );     		
             localToManager.deleteQueue();
             managerToLocal.deleteQueue();
     	}
@@ -208,7 +219,8 @@ import aws.SQS;
 			try {
 				rawTweet		= tweet.substring(tweet.indexOf('"')+1,tweet.lastIndexOf('"'));
 			} catch (IndexOutOfBoundsException e) {
-				e.printStackTrace();
+//				e.printStackTrace();
+				System.out.println("Error on tweet: " + tweet);
 				continue;
 			}
             output += "<p> <b><font color=\"" + sentiment + "\"> " + rawTweet + "</font></b> " + entities + "</p>\n";

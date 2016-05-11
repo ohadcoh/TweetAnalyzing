@@ -52,7 +52,8 @@ public class Worker implements Runnable {
 		String statisticsBucketName 	= "workersstatisticsasafohad";
 		// create new worker
 		Worker myWorker = new Worker(propertiesFilePath, inputSQSQueueName, outputSQSQueueName, statisticsBucketName);
-		myWorker.analyzeTweet();
+//		myWorker.analyzeTweet();
+		myWorker.run();
 	}
 	
 	protected Worker(	String propertiesFilePath, 
