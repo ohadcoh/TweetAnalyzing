@@ -68,7 +68,7 @@ public class EC2 {
 				List<Tag> tags = instance.getTags();
 				//System.out.println("Instance State: " + instance.getState().getName());
 				if (instance.getPublicIpAddress()== null){
-					System.out.println("no public ip for instance");
+					//System.out.println("no public ip for instance");
 					continue;
 				}
 				if (!instance.getState().getName().equals("terminated")){

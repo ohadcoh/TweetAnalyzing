@@ -348,8 +348,9 @@ public class Manager implements Runnable{
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
+			System.out.println("message from worker: " + statisticsMessageList.get(0).getBody());
 	 		workerToManager.deleteMessage(statisticsMessageList.get(0));
-
+	 		
 		}
 		
 		
