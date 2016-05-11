@@ -128,6 +128,7 @@ import aws.SQS;
  			        // 7. download the output file, and delete it      
  			        outputFile = s3.downloadFile(message.getBody());
  			        s3.deleteFile(message.getBody());
+ 			        managerToLocal.deleteMessage(message);
  				}
  			}
 			try {

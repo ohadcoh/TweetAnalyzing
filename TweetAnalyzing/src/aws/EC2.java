@@ -133,11 +133,13 @@ public class EC2 {
         lines.add("echo secretKey=$AWS_SECRET_ACCESS_KEY >> dspsass1.properties");
         if (instanceType == "manager")
         	lines.add("java -Xms256m -Xmx768m -jar manager.jar");
-        else
+        else{
         	lines.add("java -Xms256m -Xmx768m -jar worker.jar");
+        	lines.add("shutdown -h now");
+        }
         lines.add("aws s3 cp /var/log/cloud-init-output.log s3://" + statisticsBucketName + 
         							"/" + instanceType + "_" + LocalDateTime.now() + ".txt");
-        lines.add("shutdown -h now");
+        
         String str = new String(Base64.encodeBase64(join(lines, "\n").getBytes()));
         return str;
 	}

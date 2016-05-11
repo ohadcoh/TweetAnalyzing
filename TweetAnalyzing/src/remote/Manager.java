@@ -295,7 +295,7 @@ public class Manager implements Runnable{
 			while (workerTerminates);
 	 		{
 	 			messageFromManagerList = workerToManager.getMessagesMinimalVisibilityTime(1);
-	 			if(messageFromManagerList.size() == 1 && messageFromManagerList.get(0).getMessageAttributes().get("termiante")!=null){
+	 			if(messageFromManagerList.size() == 1){
 	 				workerTerminates = true;
 	 				continue;
 	 			}
