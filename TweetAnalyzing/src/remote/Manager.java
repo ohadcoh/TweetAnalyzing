@@ -350,7 +350,7 @@ public class Manager implements Runnable{
 			}
 			System.out.println("message from worker: " + statisticsMessageList.get(0).getBody());
 	 		workerToManager.deleteMessage(statisticsMessageList.get(0));
-	 		
+	 		statisticsMessageList = workerToManager.getMessages(1);
 		}
 		
 		
