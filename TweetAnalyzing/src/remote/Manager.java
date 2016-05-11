@@ -292,7 +292,6 @@ public class Manager implements Runnable{
 			try {
 				Thread.sleep(1000);
 			} catch (InterruptedException e1) {
-				// TODO Auto-generated catch block
 				e1.printStackTrace();
 			}
 			//waitsCounter = 0 ;
@@ -339,6 +338,21 @@ public class Manager implements Runnable{
 	 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
 
 		}
+		// read statistics
+		List<Message> statisticsMessageList = workerToManager.getMessages(1);
+		while(statisticsMessageList.size() > 0)
+		{
+			try {
+				writer.append(statisticsMessageList.get(0).getBody() + "\n");
+			} catch (IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+	 		workerToManager.deleteMessage(statisticsMessageList.get(0));
+
+		}
+		
+		
 		try {
 			writer.close();
 		} catch (IOException e) {
