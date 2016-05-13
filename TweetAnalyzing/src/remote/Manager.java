@@ -142,6 +142,7 @@ public class Manager implements Runnable{
 					e.printStackTrace();
 				}
 			}while(inputMessageList.size() == 0);
+			
 			Message	inputMessage = inputMessageList.get(0);
 			System.out.println("Manager: received: " + inputMessageList.get(0).getBody());
 			localToManager.deleteMessage(inputMessage);
@@ -221,9 +222,7 @@ public class Manager implements Runnable{
 			// create new output file
 			tempFile.createNewFile();
 			// read how many lines in the original file
-			//numOfLines = countLines(copyOfInputFile);
 			Writer writer = new FileWriter(tempFile);
-			
 			// write counter
 			writer.write(String.valueOf(numOfLines) + "\n");
 			// close writer
@@ -232,40 +231,7 @@ public class Manager implements Runnable{
 			e4.printStackTrace();
 			return -1;
 		}
-		
-		
-		// add all lines to workers queue
 
-//		
-//    	while (true) {          
-//    		String line = "";
-//			try {
-//				line = reader.readLine();
-//			} catch (IOException e) {
-//				e.printStackTrace();
-//				return -1;
-//			}           
-//    		if (line == null || line.length() == 0)
-//    			break;
-//    		// send with id attribute
-//    		numOfLines++;
-//    		managerToWorker.sendMessageWithId(line, taskId);
-//    	}
-//    	try {
-//			reader.close();
-//		} catch (IOException e1) {
-//			e1.printStackTrace();
-//			return -1;
-//		}
-    	
-//    	// update line counter
-//    	try {
-//			outputFileLock.acquire();
-//			updateLineCounter(numOfLines, "./" + taskId + "OutputFile.txt");
-//			outputFileLock.release();
-//		} catch (InterruptedException e) {
-//			e.printStackTrace();
-//		}
     	// update the numOfLines
     	numberOfOpenTasks++;
 		return numOfLines;
@@ -294,47 +260,7 @@ public class Manager implements Runnable{
 			} catch (InterruptedException e1) {
 				e1.printStackTrace();
 			}
-			//waitsCounter = 0 ;
-			
-//			List<Message> messageFromManagerList;
-//			boolean workerTerminates = false;
-//			while (!workerTerminates);
-//	 		{
-//	 			messageFromManagerList = workerToManager.getMessages(1);
-//	 			if(messageFromManagerList.size() == 1){
-//	 				//workerTerminates = true;
-//	 				//continue;
-//	 				break;
-//	 			}
-////	 			else if (messageFromManagerList.size() == 1){
-////	 				workerToManager.deleteMessage(messageFromManagerList.get(0));
-////	 			}
-////	 			try {
-////					Thread.sleep(500);
-////					waitsCounter++;
-////					// if waiting to long- send another message to workers
-////					if(waitsCounter == 10)
-////					{
-////						//if( ec2.countNumOfWorkers() == 0) // no more workers
-////						//	break;
-////						workerToManager.sendMessageWithIdAndTerminate("Worker- stop!", "0");
-////						System.out.println("manager after waits");
-////					}
-////				} catch (InterruptedException e) {
-////					e.printStackTrace();
-////				}
-//	 		}
-////	 		if(workerTerminates == false) // no workers
-////	 			break;
-//	 		try {
-//		 		System.out.println("Manager: Worker finished!: " + messageFromManagerList.get(0).getBody());
-//				writer.append(messageFromManagerList.get(0).getBody() + "\n");
-//		 		workerToManager.deleteMessage(messageFromManagerList.get(0));
-//		 		gNumOfWorkers--;
-//		 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
-//			} catch (IOException e) {
-//				e.printStackTrace();
-//			}
+
 	 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
 
 		}
@@ -375,6 +301,7 @@ public class Manager implements Runnable{
     
 	// read workers queue and parse the messages
 	private void readFromWorkers() {
+		int count = 0;
 		// run until terminate request arrived ***AND*** all tasks were handled and finished
     	while ((numberOfOpenTasks != 0) || (gTerminate == false)) {
     		// read one message
@@ -388,10 +315,22 @@ public class Manager implements Runnable{
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
+    			if (++count == 100){
+    				if (ec2.countNumOfWorkers() == 0){
+    					ec2.startWorkerInstances(1);
+    					count = 0;
+    				}
+    			}
     			continue;
     		}
     		
+    		count = 0;
     		workerToManager.deleteMessage(messagesList.get(0));
+    		
+    		if (messagesList.get(0).getMessageAttributes().get("terminate") != null){
+    			System.out.println(messagesList.get(0).getBody());
+    			continue;
+    		}
     		
     		String msgTaskId;
     		try {

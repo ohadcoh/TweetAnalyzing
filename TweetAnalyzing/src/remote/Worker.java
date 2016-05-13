@@ -101,7 +101,7 @@ public class Worker implements Runnable {
 	}
 	
 	private void terminate(boolean crush) {
-		
+		System.out.println("Terminate message sent!!!");
 		outputSQS.sendMessageWorkerFinished(LocalDateTime.now() + "###Worker " + id + " handled: " + numOfLinksHandled + 
 				". " + numOfLinksOk + " of them are ok, " + numOfLinksBroken + " of them are broken.\n"
 						+ "Worker has crush: " + crush, id);		

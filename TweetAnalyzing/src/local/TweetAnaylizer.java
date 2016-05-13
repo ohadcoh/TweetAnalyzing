@@ -1,28 +1,23 @@
 package local;
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.PrintWriter;
-
-import java.util.ArrayList;
+import java.io.OutputStreamWriter;
 import java.util.List;
 import java.util.UUID;
-
 import org.joda.time.LocalDateTime;
-
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.PropertiesCredentials;
 import com.amazonaws.services.s3.model.S3Object;
 import com.amazonaws.services.sqs.model.Message;
-
 import aws.EC2;
 import aws.S3;
 import aws.SQS;
 //import remote.Manager;
-
  public class TweetAnaylizer{
 	// aws 
 	private AWSCredentials credentials;
@@ -35,7 +30,6 @@ import aws.SQS;
 	// arguments from user
 	private boolean terminate;
 	private int n;
-
 	
 	// main function
     public static void main(String[] args) throws Exception {
@@ -46,7 +40,6 @@ import aws.SQS;
     		System.out.println("LocalApp: Usage: inputFileName outputFileName n terminate(optional)");
     		return;
     	}
-
     	System.out.println(LocalDateTime.now());
     	boolean terminate = false;
 		String inputFileName = args[0];
@@ -101,8 +94,7 @@ import aws.SQS;
 	
 	private void run(String inputFileName, String outputFileName) {
 		// 1. upload input file to s3
- 		String inputFileS3key = s3.uploadFile(inputFileName);
- 		 		
+ 		String inputFileS3key = s3.uploadFile(inputFileName, this.id);
  		System.out.println("LocalApp: File Uploaded\n");
  		// 2. send key to manager with attributes (numOfWorkers and my id)
  		localToManager.sendMessageWithNumOfWorkersAndId(inputFileS3key, String.valueOf(n), id);
@@ -112,20 +104,22 @@ import aws.SQS;
 			System.out.println("LocalApp: manager does not exist");
 			ec2.startManagerInstance();
 		}
-
  		// 4. read message- analyzed data
  		// read until receive answer from manager
  		List<Message> messageFromManagerList;
  		S3Object outputFile = null;
  		boolean msgFound = false;
+ 		boolean managerAlive = true;
+ 		int managerAliveCheck = 0;
  		
- 		while (!msgFound){
+ 		// 5. wait for message with my IP
+ 		while (!msgFound && managerAlive){
  			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
  			for (Message message : messageFromManagerList){
  				if (message.getMessageAttributes().get("id").getStringValue().equals(id)){
  					msgFound = true;
  			        System.out.println("LocalApp: Message from Manager with my id: " + message.getBody());
- 			        // 7. download the output file, and delete it      
+ 			        // 6. download the output file, and delete it      
  			        outputFile = s3.downloadFile(message.getBody());
  			        s3.deleteFile(message.getBody());
  			        managerToLocal.deleteMessage(message);
@@ -136,26 +130,29 @@ import aws.SQS;
 			} catch (InterruptedException e) {
 				e.printStackTrace();
 			}
+			if (++managerAliveCheck == 10){
+				if (!ec2.checkIfManagerExist()){
+					managerAlive = false;
+					if (this.terminate){
+			            localToManager.deleteQueue();
+			            managerToLocal.deleteQueue();
+					}
+				}
+				managerAliveCheck = 0;
+			}
  		}
-
-        // 8. create HTML file
-        BufferedReader reader = new BufferedReader(new InputStreamReader(outputFile.getObjectContent()));
-        ArrayList<String> allOutputLines = new ArrayList<String>(); 
-    	while (true) {          
-    	    String line;
-			try {
-				line = reader.readLine();
-				if (line == null)
-				{
-					reader.close();
-					break;
-				}        
-	    	    allOutputLines.add(line);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}           
-    	}
-    	createHTMLFile(allOutputLines, outputFileName+".html");
+ 		if (!managerAlive){
+ 			System.out.println("Manager is not alive!  Exiting...");
+ 			System.exit(1);
+ 		}
+ 		
+    	// 9. create HTML file
+    	try {
+			createHTMLFile(outputFile, outputFileName+".html");
+		} catch (IOException e) {
+			System.out.println("Error: Failed to write HTML file");
+			e.printStackTrace();
+		}
 	}
 	
 	private void terminate() {
@@ -167,7 +164,6 @@ import aws.SQS;
 	 		
      		List<Message> messageFromManagerList;
      		boolean msgFound = false;
-     		
      		while (!msgFound){
      			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
      			for (Message message : messageFromManagerList){
@@ -181,22 +177,9 @@ import aws.SQS;
 				} catch (InterruptedException e) {
 					e.printStackTrace();
 				}
+				
      		}
-//     		do{
-//     			messageFromManagerList = managerToLocal.getMessagesMinimalVisibilityTime(1);
-//     			
-//     			
-//     			if(messageFromManagerList.size() == 1)
-//     				if(messageFromManagerList.get(0).getMessageAttributes().get("id").getStringValue().equals(id))
-//     					break;
-//     				else
-//     					continue;
-//     			try {
-//    				Thread.sleep(500);
-//    			} catch (InterruptedException e) {
-//    				e.printStackTrace();
-//    			}
-//     		}while(messageFromManagerList.size() == 0 );     		
+  		
             localToManager.deleteQueue();
             managerToLocal.deleteQueue();
     	}
@@ -204,46 +187,52 @@ import aws.SQS;
 	}
 	 
     // create HTML file from the analyzed tweets file
-	private void createHTMLFile(ArrayList<String> allLines,String outputFilePath) {
-		// create output string with header
-		String output = "<HTML>\n<HEAD>\n</HEAD>\n<BODY>\n";
-		// isolate all data, add with the right color and add entities
-		for (String line : allLines) {
-			//System.out.println("LocalApp: html line-  " + line);
+	// create HTML file from the analyzed tweets file
+		private void createHTMLFile(S3Object outputFile,String outputFilePath) throws IOException {
+			File fout = new File(outputFilePath);
+			FileOutputStream fos = new FileOutputStream(fout);
+			BufferedWriter bw = new BufferedWriter(new OutputStreamWriter(fos));
+			BufferedReader reader = new BufferedReader(new InputStreamReader(outputFile.getObjectContent()));
+			// create output string with header
+	    	bw.write("<HTML>\n<HEAD>\n</HEAD>\n<BODY>\n");
+	    	while (true) {          
+	    	    String line;
+				try {
+					line = reader.readLine();
+					if (line == null)
+					{
+						reader.close();
+						break;
+					}
+					if(createOutputLine(line) != ""){
+						bw.write(createOutputLine(line));
+						bw.newLine();
+					}
+						
+				} catch (IOException e) {
+					e.printStackTrace();
+				}           
+	    	}
+	    	bw.write("</BODY>\n</HTML>");
+	    	bw.close();
+			System.out.println("LocalApp: Write html file to: "+ outputFilePath);
+			
+		}
+
+		private String createOutputLine(String line) {
 			String sentiment  	= line.substring(0, line.indexOf(';'));
 			String entitiesAndTweet = line.substring(line.indexOf(';')+1, line.length());
 			String entities 	= entitiesAndTweet.substring(0, entitiesAndTweet.indexOf(';'));
 			String tweet 		= entitiesAndTweet.substring(entitiesAndTweet.indexOf(';')+1, entitiesAndTweet.length());
 			if(tweet.equals(""))
-				continue;
+				return "";
 			String rawTweet = "";
 			try {
 				rawTweet		= tweet.substring(tweet.indexOf('"')+1,tweet.lastIndexOf('"'));
 			} catch (IndexOutOfBoundsException e) {
-//				e.printStackTrace();
-				System.out.println("Error on tweet: " + tweet);
-				continue;
+				return "";
 			}
-            output += "<p> <b><font color=\"" + sentiment + "\"> " + rawTweet + "</font></b> " + entities + "</p>\n";
+	       return "<p> <b><font color=\"" + sentiment + "\"> " + rawTweet + "</font></b> " + entities + "</p>\n";
 		}
-		// close the HTML string
-		output += "</BODY>\n</HTML>";
-		// create the file
-		if ( null == outputFilePath ) {
-			System.out.println(output);
-		} else {
-			try {
-				File file = new File (outputFilePath);
-				PrintWriter out = new PrintWriter(file);
-				out.println(output);
-				out.close();
-				System.out.println("LocalApp: Write html file to: "+ outputFilePath);
-			} catch (FileNotFoundException e) {
-				System.out.println("LocalApp: Failed to write to file: "+ outputFilePath);
-				System.out.println(output);
-			}
-		}
-		
-	}
     
  }
