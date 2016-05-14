@@ -78,7 +78,7 @@ public class SQS {
     	}
 	}
 	
-	public int sendMessageWithId(String message, String id){
+	public synchronized int sendMessageWithId(String message, String id){
 		try{
 	        //System.out.println("Sending message with id.\n");
 	        MessageAttributeValue idValue 	= new MessageAttributeValue().withDataType("String").withStringValue(id);

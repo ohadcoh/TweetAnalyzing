@@ -14,6 +14,7 @@ import java.io.Writer;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -92,19 +93,19 @@ public class Manager implements Runnable{
 		s3 				= new S3(credentials, s3BucketName);
 		ec2				= new EC2(credentials);
 		// 3. init internal info
-		numberOfOpenTasks.set(0);
-		gNumOfWorkers.set(0);
-		gTerminate.set(false); // on init no terminate
+		numberOfOpenTasks 	= new AtomicInteger(0);
+		gNumOfWorkers		= new AtomicInteger(0);
+		gTerminate			= new AtomicBoolean(false); // on init no terminate
 		readFromWorkers = new Runnable() { // init thread for reading input from worker
             public void run() {
                 Manager.this.readFromWorkers();
             }
             
         };
-        
         newTasksExecutor = Executors.newFixedThreadPool(5);//creating a pool of 5 threads
 	}
 
+	
 	protected void addNewTask(Message inputMessage) {
 		// 3. if not terminate- request for new task
 		int tempN = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
@@ -195,7 +196,11 @@ public class Manager implements Runnable{
 			
 		}
 		newTasksExecutor.shutdown();  
-        while (!newTasksExecutor.isTerminated()) {   }
+		try {
+			newTasksExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+		} catch (InterruptedException e){
+			e.printStackTrace();
+		}
         System.out.println("Finished all new task threads");  
 
 		return 0;
@@ -435,7 +440,14 @@ public class Manager implements Runnable{
     	File file = new File(path);
     	//Get Counter From File
     	String lastLine = getAndRemoveLastLine(file);
-    	int counter = Integer.valueOf(lastLine);
+    	int counter = 0;
+    	try{
+    		counter = Integer.valueOf(lastLine);
+    	}
+    	catch (Exception e){
+    		e.printStackTrace();
+    		System.out.println("line : " + line);
+    	}
     	counter--;
     	try {
 			FileWriter writer = new FileWriter(file, true);
