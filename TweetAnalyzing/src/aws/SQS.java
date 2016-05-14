@@ -94,6 +94,8 @@ public class SQS {
 	        System.out.println("AWS Error Code:   " + ase.getErrorCode());
 	        System.out.println("Error Type:       " + ase.getErrorType());
 	        System.out.println("Request ID:       " + ase.getRequestId());
+	        System.out.println("message: " + message + " ,id: " + id);
+	        ase.printStackTrace();
 	        return 1;
 	    	} catch (AmazonClientException ace) {
 	        System.out.println("Caught an AmazonClientException, which means the client encountered " +

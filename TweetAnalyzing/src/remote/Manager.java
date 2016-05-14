@@ -14,6 +14,8 @@ import java.io.Writer;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.joda.time.LocalDateTime;
 
@@ -35,10 +37,10 @@ public class Manager implements Runnable{
 	private S3 s3;
 	private EC2 ec2;
 	// internal info
-	private int gNumOfWorkers;
-	private int numberOfOpenTasks;
+	private AtomicInteger gNumOfWorkers;
+	private AtomicInteger numberOfOpenTasks;
 	// control booleans
-	private boolean gTerminate;
+	private AtomicBoolean gTerminate;
 	private String idOfTerminateRequester;
 	// variable for threads
 	ExecutorService newTasksExecutor;
@@ -90,9 +92,9 @@ public class Manager implements Runnable{
 		s3 				= new S3(credentials, s3BucketName);
 		ec2				= new EC2(credentials);
 		// 3. init internal info
-		numberOfOpenTasks 	= 0;
-		gNumOfWorkers 		= 0;
-		gTerminate			= false; // on init no terminate
+		numberOfOpenTasks.set(0);
+		gNumOfWorkers.set(0);
+		gTerminate.set(false); // on init no terminate
 		readFromWorkers = new Runnable() { // init thread for reading input from worker
             public void run() {
                 Manager.this.readFromWorkers();
@@ -109,15 +111,13 @@ public class Manager implements Runnable{
 		String tempId = inputMessage.getMessageAttributes().get("id").getStringValue();
 		long tempTaskCounter = parseNewTask(inputMessage, tempId);
 		
-		gNumOfWorkers = ec2.countNumOfWorkers();
-		int neededWorkers = (int) (tempTaskCounter/tempN - gNumOfWorkers);
+		int neededWorkers = (int) (tempTaskCounter/tempN - gNumOfWorkers.get());
 		// if need to launch more workers 
 		System.out.println("Manager: Current Msg Counter = " + tempTaskCounter);
 		System.out.println("Manager: N = " + tempN);
 		System.out.println("Manager: Creating " + neededWorkers + " workers.");
 		if(neededWorkers > 0)
 		{
-			gNumOfWorkers += neededWorkers;
 			ec2.startWorkerInstances(neededWorkers);
 		}
 		
@@ -157,7 +157,7 @@ public class Manager implements Runnable{
 
 	// handle queue from local applications
 	private int readFromLocalApps(){
-		while(!gTerminate)
+		while(!gTerminate.get())
 		{
 			// 1. read input message (keep reading until receive request)
 			List<Message> inputMessageList;
@@ -178,11 +178,12 @@ public class Manager implements Runnable{
 			if(inputMessage.getMessageAttributes().get("terminate") != null)
 			{
 				System.out.println("Manager received termination request");
-				gTerminate = true;
+				gTerminate.set(true);
 				idOfTerminateRequester = inputMessage.getMessageAttributes().get("id").getStringValue();
 				continue;
 			}
 			
+			gNumOfWorkers.set(ec2.countNumOfWorkers());
 			Runnable addNewTask		= new Runnable(){ // init thread for adding new task
 	            public void run() {
 	            	Manager.this.addNewTask(inputMessage);
@@ -254,7 +255,7 @@ public class Manager implements Runnable{
 		}
 
     	// update the numOfLines
-    	numberOfOpenTasks++;
+    	numberOfOpenTasks.incrementAndGet();
 		return numOfLines;
 	}
 	
@@ -262,7 +263,7 @@ public class Manager implements Runnable{
 	private void terminate(){
 		// close all workers and wait for them to finish properly
 		//int waitsCounter;
-		gNumOfWorkers = ec2.countNumOfWorkers();
+		gNumOfWorkers.set(ec2.countNumOfWorkers());
 		System.out.println("manager termination, Num of workers: " + gNumOfWorkers);
 		Writer writer= null;
 		String statisticsFileName = "./" + LocalDateTime.now() + "_allWorkersStatistics.txt";
@@ -272,19 +273,19 @@ public class Manager implements Runnable{
 		} catch (IOException e1) {
 			e1.printStackTrace();
 		}
-		while((gNumOfWorkers = ec2.countNumOfWorkers()) != 0)
+		gNumOfWorkers.set(ec2.countNumOfWorkers());
+		do
 		{
 			// send termination message to workers
 			managerToWorker.sendMessageWithIdAndTerminate("Worker- stop!", "0");
+	 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
 			try {
 				Thread.sleep(1000);
 			} catch (InterruptedException e1) {
 				e1.printStackTrace();
 			}
-
-	 		System.out.println("Manager: " + gNumOfWorkers + " more to go!");
-
-		}
+	 		gNumOfWorkers.set(ec2.countNumOfWorkers());
+		}while((gNumOfWorkers.get()) != 0);
 		// read statistics
 		List<Message> statisticsMessageList = workerToManager.getMessages(1);
 		while(statisticsMessageList.size() > 0)
@@ -324,7 +325,7 @@ public class Manager implements Runnable{
 	private void readFromWorkers() {
 		int count = 0;
 		// run until terminate request arrived ***AND*** all tasks were handled and finished
-    	while ((numberOfOpenTasks != 0) || (gTerminate == false)) {
+    	while ((numberOfOpenTasks.get() != 0) || (gTerminate.get() == false)) {
     		// read one message
     		List<Message>  messagesList = workerToManager.getMessages(1);
     		
@@ -376,7 +377,7 @@ public class Manager implements Runnable{
     			tempFile.delete();
     			System.out.println("Task " + msgTaskId + ": output File Uploaded\n");
     			managerToLocal.sendMessageWithId(outputFileS3key, msgTaskId);
-    			numberOfOpenTasks--;
+    			numberOfOpenTasks.decrementAndGet();
     		}
     		// if 1 - line added, do nothing
 
