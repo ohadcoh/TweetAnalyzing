@@ -12,6 +12,8 @@ import java.io.PrintWriter;
 import java.io.RandomAccessFile;
 import java.io.Writer;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.joda.time.LocalDateTime;
 
@@ -39,6 +41,7 @@ public class Manager implements Runnable{
 	private boolean gTerminate;
 	private String idOfTerminateRequester;
 	// variable for threads
+	ExecutorService newTasksExecutor;
 	private Runnable readFromWorkers;
 	
 	public static void main(String[] args)
@@ -94,7 +97,31 @@ public class Manager implements Runnable{
             public void run() {
                 Manager.this.readFromWorkers();
             }
+            
         };
+        
+        newTasksExecutor = Executors.newFixedThreadPool(5);//creating a pool of 5 threads
+	}
+
+	protected void addNewTask(Message inputMessage) {
+		// 3. if not terminate- request for new task
+		int tempN = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
+		String tempId = inputMessage.getMessageAttributes().get("id").getStringValue();
+		long tempTaskCounter = parseNewTask(inputMessage, tempId);
+		
+		gNumOfWorkers = ec2.countNumOfWorkers();
+		int neededWorkers = (int) (tempTaskCounter/tempN - gNumOfWorkers);
+		// if need to launch more workers 
+		System.out.println("Manager: Current Msg Counter = " + tempTaskCounter);
+		System.out.println("Manager: N = " + tempN);
+		System.out.println("Manager: Creating " + neededWorkers + " workers.");
+		if(neededWorkers > 0)
+		{
+			gNumOfWorkers += neededWorkers;
+			ec2.startWorkerInstances(neededWorkers);
+		}
+		
+		addLinesToWorkersQueue(tempId);		
 	}
 
 	// run the manager
@@ -143,7 +170,7 @@ public class Manager implements Runnable{
 				}
 			}while(inputMessageList.size() == 0);
 			
-			Message	inputMessage = inputMessageList.get(0);
+			final Message	inputMessage = inputMessageList.get(0);
 			System.out.println("Manager: received: " + inputMessageList.get(0).getBody());
 			localToManager.deleteMessage(inputMessage);
 			
@@ -156,26 +183,20 @@ public class Manager implements Runnable{
 				continue;
 			}
 			
-			// 3. if not terminate- request for new task
-			int tempN = Integer.parseInt(inputMessage.getMessageAttributes().get("numOfWorkers").getStringValue());
-			String tempId = inputMessage.getMessageAttributes().get("id").getStringValue();
-			long tempTaskCounter = parseNewTask(inputMessage, tempId);
+			Runnable addNewTask		= new Runnable(){ // init thread for adding new task
+	            public void run() {
+	            	Manager.this.addNewTask(inputMessage);
+	            }
+	        };
+	        System.out.println("New task thread");
+	        newTasksExecutor.execute(addNewTask);
 			
-			gNumOfWorkers = ec2.countNumOfWorkers();
-			int neededWorkers = (int) (tempTaskCounter/tempN - gNumOfWorkers);
-			// if need to launch more workers 
-			System.out.println("Manager: Current Msg Counter = " + tempTaskCounter);
-			System.out.println("Manager: N = " + tempN);
-			System.out.println("Manager: Creating " + neededWorkers + " workers.");
-			if(neededWorkers > 0)
-			{
-				gNumOfWorkers += neededWorkers;
-				ec2.startWorkerInstances(neededWorkers);
-			}
 			
-			addLinesToWorkersQueue(tempId);
 		}
-		// close all workers...
+		newTasksExecutor.shutdown();  
+        while (!newTasksExecutor.isTerminated()) {   }
+        System.out.println("Finished all new task threads");  
+
 		return 0;
 
 	}
