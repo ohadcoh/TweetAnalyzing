@@ -14,6 +14,7 @@ import java.io.Writer;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -195,7 +196,11 @@ public class Manager implements Runnable{
 			
 		}
 		newTasksExecutor.shutdown();  
-        while (!newTasksExecutor.isTerminated()) {   }
+		try {
+			newTasksExecutor.awaitTermination(Long.MAX_VALUE, TimeUnit.SECONDS);
+		} catch (InterruptedException e){
+			e.printStackTrace();
+		}
         System.out.println("Finished all new task threads");  
 
 		return 0;
